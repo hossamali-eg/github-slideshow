@@ -1,0 +1,6 @@
+-keep class com.wifimanager.data.models.** { *; }
+-keep class com.wifimanager.data.api.** { *; }
+-keepattributes Signature
+-keepattributes *Annotation*
+-dontwarn okhttp3.**
+-dontwarn retrofit2.**
