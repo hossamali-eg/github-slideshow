@@ -67,6 +67,12 @@ class RouterRepository @Inject constructor(
     suspend fun testConnection(ip: String): RouterStatus =
         routerApi.testConnection(ip)
 
+    fun setWebViewSession(ip: String, cookies: String, stok: String) {
+        activeRouterType = RouterType.ZTE
+        zteApi.configure(ip)
+        zteApi.configureWithSession(cookies, stok)
+    }
+
     // ==================== Devices ====================
 
     val allDevices: LiveData<List<ConnectedDevice>> = deviceDao.getAllDevices()

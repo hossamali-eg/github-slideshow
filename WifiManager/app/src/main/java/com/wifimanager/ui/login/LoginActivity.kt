@@ -6,6 +6,7 @@ import android.view.View
 import android.widget.ArrayAdapter
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import com.google.android.material.snackbar.Snackbar
 import com.wifimanager.R
 import com.wifimanager.data.models.RouterConfig
@@ -13,6 +14,7 @@ import com.wifimanager.data.models.RouterType
 import com.wifimanager.databinding.ActivityLoginBinding
 import com.wifimanager.ui.dashboard.DashboardActivity
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
 class LoginActivity : AppCompatActivity() {
@@ -120,7 +122,6 @@ class LoginActivity : AppCompatActivity() {
             val username = binding.etUsername.text.toString().trim()
             val password = binding.etPassword.text.toString()
 
-            // Match selected display name back to RouterType enum
             val selectedLabel = binding.spinnerRouterType.text.toString()
             val types = resources.getStringArray(R.array.router_types)
             val selectedIndex = types.indexOfFirst { it == selectedLabel }
@@ -133,7 +134,28 @@ class LoginActivity : AppCompatActivity() {
             }
 
             binding.tilRouterIp.error = null
-            viewModel.login(ip, username, password, routerType)
+
+            if (routerType == RouterType.ZTE) {
+                binding.progressBar.visibility = View.VISIBLE
+                binding.btnConnect.isEnabled = false
+                lifecycleScope.launch {
+                    val result = try {
+                        WebViewLoginHelper(this@LoginActivity).login(ip, username, password)
+                    } catch (e: Exception) {
+                        WebViewLoginHelper.LoginResult(false, errorMessage = e.message ?: "خطأ في الاتصال")
+                    }
+                    binding.progressBar.visibility = View.GONE
+                    binding.btnConnect.isEnabled = true
+                    if (result.success) {
+                        val config = RouterConfig(ipAddress = ip, username = username, password = password, routerType = routerType)
+                        viewModel.onWebViewLoginSuccess(config, result.cookies, result.stok)
+                    } else {
+                        showError(result.errorMessage.ifEmpty { "اسم المستخدم أو كلمة المرور غير صحيحة" })
+                    }
+                }
+            } else {
+                viewModel.login(ip, username, password, routerType)
+            }
         }
     }
 

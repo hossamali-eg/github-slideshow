@@ -56,6 +56,12 @@ class LoginViewModel @Inject constructor(
         }
     }
 
+    fun onWebViewLoginSuccess(config: RouterConfig, cookies: String, stok: String) {
+        repository.setWebViewSession(config.ipAddress, cookies, stok)
+        saveAndConnect(config)
+        _loginState.value = LoginState.Success(config)
+    }
+
     fun saveAndConnect(config: RouterConfig) {
         viewModelScope.launch {
             val id = repository.saveRouterConfig(config)

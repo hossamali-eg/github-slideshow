@@ -77,6 +77,19 @@ class ZTEApiService @Inject constructor() {
         stok = ""
     }
 
+    fun configureWithSession(cookies: String, stokValue: String) {
+        val match = Regex("""sysauth=([^;]+)""").find(cookies)
+        sysauthToken = match?.groupValues?.getOrElse(1) { "" }?.trim() ?: ""
+        if (stokValue.isNotEmpty()) stok = stokValue
+        if (sysauthToken.isNotEmpty()) {
+            val domain = baseUrl.removePrefix("https://").removePrefix("http://").substringBefore("/")
+            cookieStore.clear()
+            try {
+                cookieStore.add(Cookie.Builder().name("sysauth").value(sysauthToken).domain(domain).build())
+            } catch (_: Exception) {}
+        }
+    }
+
     // ─────────────────────────────────────────────────────────────
     // Authentication
     // ─────────────────────────────────────────────────────────────
