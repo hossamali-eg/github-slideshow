@@ -83,12 +83,22 @@ class ZTEApiService @Inject constructor() {
 
     suspend fun login(username: String, password: String): RouterStatus =
         withContext(Dispatchers.IO) {
-            // Try JSON-RPC login (newer H188A firmware)
-            val jsonResult = tryJsonRpcLogin(username, password)
+            // Try all methods in order until one succeeds
+
+            // Method 1: ZTE JSON-RPC with MD5 password (newer firmware)
+            val jsonResult = tryJsonRpcLogin(username, md5(password))
             if (jsonResult.isAuthenticated) return@withContext jsonResult
 
-            // Fall back to LuCI form login
-            tryLuciLogin(username, password)
+            // Method 2: ZTE JSON-RPC with plain text password
+            val jsonPlain = tryJsonRpcLogin(username, password)
+            if (jsonPlain.isAuthenticated) return@withContext jsonPlain
+
+            // Method 3: LuCI form with luci_username/luci_password fields
+            val luciResult = tryLuciLogin(username, password)
+            if (luciResult.isAuthenticated) return@withContext luciResult
+
+            // Method 4: ZTE specific web form (H188A typical)
+            tryZteFormLogin(username, password)
         }
 
     private suspend fun tryJsonRpcLogin(username: String, password: String): RouterStatus {
@@ -97,7 +107,7 @@ class ZTEApiService @Inject constructor() {
                 put("method", "login")
                 put("params", JSONArray().apply {
                     put(username)
-                    put(md5(password))
+                    put(password)
                 })
             }.toString()
 
@@ -125,17 +135,13 @@ class ZTEApiService @Inject constructor() {
 
     private suspend fun tryLuciLogin(username: String, password: String): RouterStatus {
         return try {
-            // Step 1: GET login page to grab any hidden fields
-            val getReq = Request.Builder().url("$baseUrl/").get().build()
-            client.newCall(getReq).execute().close()
+            client.newCall(Request.Builder().url("$baseUrl/").get().build()).execute().close()
 
-            // Step 2: POST credentials
             val formBody = FormBody.Builder()
+                .add("luci_username", username)
+                .add("luci_password", password)
                 .add("username", username)
-                .add("psd", password)
-                .add("login_n", username)
-                .add("login_p", password)
-                .add("selectLang", "zh_CN")
+                .add("password", password)
                 .build()
 
             val postReq = Request.Builder()
@@ -147,20 +153,55 @@ class ZTEApiService @Inject constructor() {
             val resp = client.newCall(postReq).execute()
             val body = resp.body?.string() ?: ""
 
-            // Extract stok from redirect URL or body
-            stok = extractStok(resp.request.url.toString())
-                .ifEmpty { extractStok(body) }
+            stok = extractStok(resp.request.url.toString()).ifEmpty { extractStok(body) }
 
-            val authenticated = sysauthToken.isNotEmpty() || stok.isNotEmpty() ||
-                    resp.isSuccessful && !body.contains("login", ignoreCase = true)
+            val authenticated = sysauthToken.isNotEmpty() || stok.isNotEmpty()
 
             RouterStatus(
                 isConnected = true,
                 isAuthenticated = authenticated,
-                errorMessage = if (!authenticated) "اسم المستخدم أو كلمة المرور خاطئة" else ""
+                errorMessage = if (!authenticated) "" else ""
             )
         } catch (e: Exception) {
             RouterStatus(isConnected = false, isAuthenticated = false, errorMessage = e.message ?: "خطأ في الاتصال")
+        }
+    }
+
+    private suspend fun tryZteFormLogin(username: String, password: String): RouterStatus {
+        return try {
+            // ZTE H188A typically uses this login endpoint
+            val formBody = FormBody.Builder()
+                .add("username", username)
+                .add("psd", password)
+                .add("login_n", username)
+                .add("login_p", password)
+                .add("selectLang", "ar")
+                .build()
+
+            val endpoints = listOf(
+                "$baseUrl/cgi-bin/login.cgi",
+                "$baseUrl/login",
+                "$baseUrl/cgi-bin/luci/",
+            )
+
+            for (url in endpoints) {
+                try {
+                    val resp = client.newCall(
+                        Request.Builder().url(url).post(formBody)
+                            .addHeader("Referer", "$baseUrl/").build()
+                    ).execute()
+                    val body = resp.body?.string() ?: ""
+                    stok = extractStok(resp.request.url.toString()).ifEmpty { extractStok(body) }
+                    if (sysauthToken.isNotEmpty() || stok.isNotEmpty()) {
+                        return RouterStatus(isConnected = true, isAuthenticated = true)
+                    }
+                } catch (_: Exception) {}
+            }
+
+            RouterStatus(isConnected = true, isAuthenticated = false,
+                errorMessage = "اسم المستخدم أو كلمة المرور خاطئة")
+        } catch (e: Exception) {
+            RouterStatus(isConnected = false, isAuthenticated = false, errorMessage = e.message ?: "خطأ")
         }
     }
 
