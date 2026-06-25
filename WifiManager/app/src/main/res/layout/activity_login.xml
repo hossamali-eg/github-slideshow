@@ -189,6 +189,43 @@
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
+            <!-- ZTE H188A hint card -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/cardZteHint"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                app:cardBackgroundColor="#1A4F8EF7"
+                app:cardCornerRadius="12dp"
+                app:cardElevation="0dp"
+                app:strokeColor="@color/primary"
+                app:strokeWidth="1dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="14dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="💡 ZTE ZXHN H188A"
+                        android:textColor="@color/primary"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="• IP افتراضي: 192.168.1.1\n• اسم المستخدم: admin\n• كلمة المرور: مكتوبة على ملصق الراوتر أو admin"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp"
+                        android:lineSpacingMultiplier="1.4" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
             <!-- Saved Routers -->
             <TextView
                 android:layout_width="match_parent"

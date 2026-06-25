@@ -2,6 +2,7 @@ package com.wifimanager.data.repository
 
 import androidx.lifecycle.LiveData
 import com.wifimanager.data.api.RouterApiService
+import com.wifimanager.data.api.ZTEApiService
 import com.wifimanager.data.db.ConnectedDeviceDao
 import com.wifimanager.data.db.RouterConfigDao
 import com.wifimanager.data.db.ScheduleRuleDao
@@ -14,10 +15,13 @@ import javax.inject.Singleton
 @Singleton
 class RouterRepository @Inject constructor(
     private val routerApi: RouterApiService,
+    private val zteApi: ZTEApiService,
     private val routerConfigDao: RouterConfigDao,
     private val deviceDao: ConnectedDeviceDao,
     private val scheduleDao: ScheduleRuleDao
 ) {
+    private var activeRouterType: RouterType = RouterType.GENERIC
+
     // ==================== Router Config ====================
 
     val allRouters: LiveData<List<RouterConfig>> = routerConfigDao.getAllRouters()
@@ -39,10 +43,20 @@ class RouterRepository @Inject constructor(
     // ==================== Connection ====================
 
     suspend fun connect(config: RouterConfig): RouterStatus = withContext(Dispatchers.IO) {
-        routerApi.configure(config.ipAddress)
+        activeRouterType = config.routerType
         val status = when (config.routerType) {
-            RouterType.TP_LINK -> routerApi.loginTPLink(config.username, config.password)
-            else -> routerApi.loginGeneric(config.username, config.password)
+            RouterType.ZTE -> {
+                zteApi.configure(config.ipAddress)
+                zteApi.login(config.username, config.password)
+            }
+            RouterType.TP_LINK -> {
+                routerApi.configure(config.ipAddress)
+                routerApi.loginTPLink(config.username, config.password)
+            }
+            else -> {
+                routerApi.configure(config.ipAddress)
+                routerApi.loginGeneric(config.username, config.password)
+            }
         }
         if (status.isAuthenticated) {
             routerConfigDao.updateLastConnected(config.id, System.currentTimeMillis())
@@ -60,7 +74,10 @@ class RouterRepository @Inject constructor(
     val blockedDevices: LiveData<List<ConnectedDevice>> = deviceDao.getBlockedDevices()
 
     suspend fun refreshDevices(): List<ConnectedDevice> {
-        val devices = routerApi.getConnectedDevices()
+        val devices = when (activeRouterType) {
+            RouterType.ZTE -> zteApi.getConnectedDevices()
+            else -> routerApi.getConnectedDevices()
+        }
         deviceDao.markAllOffline()
         devices.forEach { device ->
             val existing = deviceDao.getDeviceByMac(device.macAddress)
@@ -84,13 +101,19 @@ class RouterRepository @Inject constructor(
     }
 
     suspend fun blockDevice(mac: String, block: Boolean): Boolean {
-        val success = routerApi.blockDevice(mac, block)
+        val success = when (activeRouterType) {
+            RouterType.ZTE -> zteApi.blockDevice(mac, block)
+            else -> routerApi.blockDevice(mac, block)
+        }
         if (success) deviceDao.setBlocked(mac, block)
         return success
     }
 
     suspend fun setSpeedLimit(mac: String, downloadKbps: Int, uploadKbps: Int): Boolean {
-        val success = routerApi.setDeviceSpeedLimit(mac, downloadKbps, uploadKbps)
+        val success = when (activeRouterType) {
+            RouterType.ZTE -> zteApi.setSpeedLimit(mac, downloadKbps, uploadKbps)
+            else -> routerApi.setDeviceSpeedLimit(mac, downloadKbps, uploadKbps)
+        }
         if (success) deviceDao.setSpeedLimit(mac, downloadKbps, uploadKbps)
         return success
     }
@@ -109,13 +132,17 @@ class RouterRepository @Inject constructor(
 
     // ==================== Internet Control ====================
 
-    suspend fun setInternetEnabled(enabled: Boolean): Boolean =
-        routerApi.setInternetEnabled(enabled)
+    suspend fun setInternetEnabled(enabled: Boolean): Boolean = when (activeRouterType) {
+        RouterType.ZTE -> zteApi.setInternetEnabled(enabled)
+        else -> routerApi.setInternetEnabled(enabled)
+    }
 
     // ==================== Network Stats ====================
 
-    suspend fun getNetworkStats(): NetworkStats =
-        routerApi.getNetworkStats()
+    suspend fun getNetworkStats(): NetworkStats = when (activeRouterType) {
+        RouterType.ZTE -> zteApi.getNetworkStats()
+        else -> routerApi.getNetworkStats()
+    }
 
     // ==================== Schedule Rules ====================
 

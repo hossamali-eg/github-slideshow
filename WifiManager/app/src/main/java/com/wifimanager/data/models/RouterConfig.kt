@@ -21,6 +21,7 @@ data class RouterConfig(
 
 enum class RouterType {
     GENERIC,
+    ZTE,
     TP_LINK,
     D_LINK,
     HUAWEI,

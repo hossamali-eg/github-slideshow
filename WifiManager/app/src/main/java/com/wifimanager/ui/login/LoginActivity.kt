@@ -30,6 +30,8 @@ class LoginActivity : AppCompatActivity() {
         setupSavedRoutersList()
         setupObservers()
         setupClickListeners()
+        // Pre-select ZTE as default (most common router for this user)
+        preselectZTE()
     }
 
     private fun setupRouterTypeDropdown() {
@@ -37,6 +39,42 @@ class LoginActivity : AppCompatActivity() {
         val adapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, types)
         binding.spinnerRouterType.setAdapter(adapter)
         binding.spinnerRouterType.setText(types[0], false)
+
+        // Auto-fill defaults per router type
+        binding.spinnerRouterType.setOnItemClickListener { _, _, position, _ ->
+            when (routerTypeValues.getOrNull(position)) {
+                RouterType.ZTE -> {
+                    if (binding.etRouterIp.text.isNullOrBlank())
+                        binding.etRouterIp.setText("192.168.1.1")
+                    if (binding.etUsername.text.isNullOrBlank())
+                        binding.etUsername.setText("admin")
+                }
+                RouterType.TP_LINK -> {
+                    if (binding.etRouterIp.text.isNullOrBlank())
+                        binding.etRouterIp.setText("192.168.0.1")
+                    if (binding.etUsername.text.isNullOrBlank())
+                        binding.etUsername.setText("admin")
+                }
+                RouterType.HUAWEI -> {
+                    if (binding.etRouterIp.text.isNullOrBlank())
+                        binding.etRouterIp.setText("192.168.1.1")
+                    if (binding.etUsername.text.isNullOrBlank())
+                        binding.etUsername.setText("admin")
+                }
+                else -> {}
+            }
+        }
+    }
+
+    private fun preselectZTE() {
+        val types = resources.getStringArray(R.array.router_types)
+        val zteIndex = types.indexOfFirst { it.contains("ZTE", ignoreCase = true) }
+        if (zteIndex >= 0) {
+            binding.spinnerRouterType.setText(types[zteIndex], false)
+        }
+        // ZTE H188A default IP
+        binding.etRouterIp.setText("192.168.1.1")
+        binding.etUsername.setText("admin")
     }
 
     private fun setupSavedRoutersList() {
@@ -81,9 +119,13 @@ class LoginActivity : AppCompatActivity() {
             val ip = binding.etRouterIp.text.toString().trim()
             val username = binding.etUsername.text.toString().trim()
             val password = binding.etPassword.text.toString()
-            val typeIndex = routerTypeValues.indexOfFirst {
-                it.name == binding.spinnerRouterType.text.toString()
-            }.let { if (it == -1) 0 else it }
+
+            // Match selected display name back to RouterType enum
+            val selectedLabel = binding.spinnerRouterType.text.toString()
+            val types = resources.getStringArray(R.array.router_types)
+            val selectedIndex = types.indexOfFirst { it == selectedLabel }
+                .let { if (it < 0) 0 else it }
+            val routerType = routerTypeValues.getOrElse(selectedIndex) { RouterType.GENERIC }
 
             if (ip.isEmpty()) {
                 binding.tilRouterIp.error = "أدخل IP الراوتر"
@@ -91,7 +133,7 @@ class LoginActivity : AppCompatActivity() {
             }
 
             binding.tilRouterIp.error = null
-            viewModel.login(ip, username, password, routerTypeValues[typeIndex])
+            viewModel.login(ip, username, password, routerType)
         }
     }
 

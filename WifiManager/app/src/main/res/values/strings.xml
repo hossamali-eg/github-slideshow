@@ -19,9 +19,10 @@
     <string name="save">حفظ</string>
     <string name="confirm">تأكيد</string>
 
-    <!-- Router types -->
+    <!-- Router types (order must match RouterType enum) -->
     <string-array name="router_types">
         <item>عام (Generic)</item>
+        <item>ZTE ZXHN H188A ★</item>
         <item>TP-Link</item>
         <item>D-Link</item>
         <item>Huawei</item>

@@ -3,6 +3,7 @@ package com.wifimanager.di
 import android.content.Context
 import androidx.room.Room
 import com.wifimanager.data.api.RouterApiService
+import com.wifimanager.data.api.ZTEApiService
 import com.wifimanager.data.db.AppDatabase
 import com.wifimanager.data.db.ConnectedDeviceDao
 import com.wifimanager.data.db.RouterConfigDao
@@ -37,4 +38,8 @@ object AppModule {
     @Provides
     @Singleton
     fun provideRouterApiService(): RouterApiService = RouterApiService()
+
+    @Provides
+    @Singleton
+    fun provideZTEApiService(): ZTEApiService = ZTEApiService()
 }
