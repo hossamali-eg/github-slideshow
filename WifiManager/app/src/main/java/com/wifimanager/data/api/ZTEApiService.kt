@@ -83,82 +83,92 @@ class ZTEApiService @Inject constructor() {
 
     suspend fun login(username: String, password: String): RouterStatus =
         withContext(Dispatchers.IO) {
-            // Smart login: read actual HTML form and submit like a browser
-            val smartResult = trySmartFormLogin(username, password)
-            if (smartResult.isAuthenticated) return@withContext smartResult
-
-            // Fallback: JSON-RPC (newer firmware)
-            val jsonMd5 = tryJsonRpcLogin(username, md5(password))
-            if (jsonMd5.isAuthenticated) return@withContext jsonMd5
-
-            val jsonPlain = tryJsonRpcLogin(username, password)
-            if (jsonPlain.isAuthenticated) return@withContext jsonPlain
-
-            RouterStatus(isConnected = true, isAuthenticated = false,
-                errorMessage = "اسم المستخدم أو كلمة المرور خاطئة")
-        }
-
-    // Reads actual login page HTML and submits with correct form fields
-    private suspend fun trySmartFormLogin(username: String, password: String): RouterStatus {
-        return try {
-            // Step 1: Load the login page as a browser would
-            val pageResp = client.newCall(
-                Request.Builder().url("$baseUrl/").get()
-                    .addHeader("User-Agent", "Mozilla/5.0 (Android)")
-                    .build()
-            ).execute()
+            // Load login page once
+            val pageResp = try {
+                client.newCall(
+                    Request.Builder().url("$baseUrl/").get()
+                        .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 11)")
+                        .build()
+                ).execute()
+            } catch (e: Exception) {
+                return@withContext RouterStatus(isConnected = false, isAuthenticated = false,
+                    errorMessage = "تعذر الاتصال بالراوتر: ${e.message}")
+            }
             val html = pageResp.body?.string() ?: ""
             val pageUrl = pageResp.request.url.toString()
+            val postUrl = resolveFormAction(html, pageUrl)
 
-            // Step 2: Find form action URL
-            val actionRegex = Regex("""<form[^>]+action=["']?([^"'\s>]+)["']?""", RegexOption.IGNORE_CASE)
-            val rawAction = actionRegex.find(html)?.groupValues?.getOrElse(1) { "" } ?: ""
-            val postUrl = when {
-                rawAction.startsWith("http") -> rawAction
-                rawAction.startsWith("/")    -> "$baseUrl$rawAction"
-                rawAction.isNotEmpty()       -> "$baseUrl/$rawAction"
-                else                         -> pageUrl
+            // ZTE H188A (WE Egypt) uses field 'psd' with sha256(password)
+            // Try combinations in order most-likely-first
+            val attempts = listOf(
+                mapOf("username" to username, "psd" to sha256(password)),
+                mapOf("username" to username, "psd" to password),
+                mapOf("username" to username, "psd" to md5(password)),
+                mapOf("username" to username, "password" to sha256(password)),
+                mapOf("username" to username, "password" to password),
+                mapOf("luci_username" to username, "luci_password" to password),
+                mapOf("username" to username, "password" to password,
+                    "luci_username" to username, "luci_password" to password)
+            )
+
+            for (fields in attempts) {
+                val result = submitForm(postUrl, pageUrl, fields, html)
+                if (result.isAuthenticated) return@withContext result
             }
 
-            // Step 3: Find all <input> field names and build form
-            val inputRegex = Regex("""<input[^>]+name=["']([^"']+)["'][^>]*>""", RegexOption.IGNORE_CASE)
-            val fieldNames = inputRegex.findAll(html).map { it.groupValues[1] }.toList()
+            // Last resort: JSON-RPC
+            val jsonResult = tryJsonRpcLogin(username, sha256(password))
+            if (jsonResult.isAuthenticated) return@withContext jsonResult
 
+            RouterStatus(isConnected = true, isAuthenticated = false,
+                errorMessage = "اسم المستخدم أو كلمة المرور غير صحيحة")
+        }
+
+    private fun resolveFormAction(html: String, pageUrl: String): String {
+        val raw = Regex("""<form[^>]+action=["']?([^"'\s>]+)["']?""", RegexOption.IGNORE_CASE)
+            .find(html)?.groupValues?.getOrElse(1) { "" } ?: ""
+        return when {
+            raw.startsWith("http") -> raw
+            raw.startsWith("/")    -> "$baseUrl$raw"
+            raw.isNotEmpty()       -> "$baseUrl/$raw"
+            else                   -> pageUrl
+        }
+    }
+
+    private suspend fun submitForm(
+        postUrl: String, referer: String,
+        fields: Map<String, String>, html: String
+    ): RouterStatus {
+        return try {
+            // Include any hidden input fields from the page (CSRF tokens etc.)
+            val hiddenRegex = Regex(
+                """<input[^>]+type=["']?hidden["']?[^>]+name=["']([^"']+)["'][^>]+value=["']([^"']*)["']""",
+                RegexOption.IGNORE_CASE
+            )
             val formBuilder = FormBody.Builder()
-            val usernameFields = setOf("username", "user", "login", "luci_username", "login_n", "uname")
-            val passwordFields = setOf("password", "passwd", "psd", "pass", "luci_password", "login_p", "pwd")
-
-            val addedFields = mutableSetOf<String>()
-            for (field in fieldNames) {
-                val lower = field.lowercase()
-                when {
-                    lower in usernameFields -> { formBuilder.add(field, username); addedFields.add(lower) }
-                    lower in passwordFields -> { formBuilder.add(field, password); addedFields.add(lower) }
-                }
+            hiddenRegex.findAll(html).forEach { m ->
+                formBuilder.add(m.groupValues[1], m.groupValues[2])
             }
-            // Always ensure these core fields are present
-            if ("username" !in addedFields) formBuilder.add("username", username)
-            if ("password" !in addedFields) formBuilder.add("password", password)
-            if ("luci_username" !in addedFields) formBuilder.add("luci_username", username)
-            if ("luci_password" !in addedFields) formBuilder.add("luci_password", password)
+            fields.forEach { (k, v) -> formBuilder.add(k, v) }
 
-            // Step 4: POST like a real browser
             val resp = client.newCall(
                 Request.Builder().url(postUrl).post(formBuilder.build())
-                    .addHeader("Referer", pageUrl)
-                    .addHeader("User-Agent", "Mozilla/5.0 (Android)")
+                    .addHeader("Referer", referer)
+                    .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 11)")
                     .build()
             ).execute()
-            val respBody = resp.body?.string() ?: ""
+            val body = resp.body?.string() ?: ""
+            val finalUrl = resp.request.url.toString()
 
-            stok = extractStok(resp.request.url.toString()).ifEmpty { extractStok(respBody) }
+            stok = extractStok(finalUrl).ifEmpty { extractStok(body) }
 
-            RouterStatus(
-                isConnected = true,
-                isAuthenticated = sysauthToken.isNotEmpty() || stok.isNotEmpty()
-            )
+            // Success if: got sysauth cookie, stok in URL, or redirected away from login page
+            val authenticated = sysauthToken.isNotEmpty() || stok.isNotEmpty() ||
+                    (finalUrl != postUrl && !finalUrl.contains("login", ignoreCase = true) && body.length > 200)
+
+            RouterStatus(isConnected = true, isAuthenticated = authenticated)
         } catch (e: Exception) {
-            RouterStatus(isConnected = false, isAuthenticated = false, errorMessage = e.message ?: "")
+            RouterStatus(isConnected = false, isAuthenticated = false)
         }
     }
 
@@ -527,6 +537,11 @@ class ZTEApiService @Inject constructor() {
 
     private fun md5(input: String): String {
         val md = java.security.MessageDigest.getInstance("MD5")
+        return md.digest(input.toByteArray()).fold("") { s, b -> s + "%02x".format(b) }
+    }
+
+    private fun sha256(input: String): String {
+        val md = java.security.MessageDigest.getInstance("SHA-256")
         return md.digest(input.toByteArray()).fold("") { s, b -> s + "%02x".format(b) }
     }
 }
