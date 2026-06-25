@@ -1,10 +1,15 @@
 package com.wifimanager.service
 
-import android.app.Service
-import android.content.Intent
-import android.os.IBinder
+import com.google.firebase.messaging.FirebaseMessagingService
+import com.google.firebase.messaging.RemoteMessage
 
-// Placeholder — Firebase FCM will be enabled when google-services.json is configured.
-class FCMService : Service() {
-    override fun onBind(intent: Intent?): IBinder? = null
+class FCMService : FirebaseMessagingService() {
+
+    override fun onMessageReceived(remoteMessage: RemoteMessage) {
+        // Remote control commands arrive here when app is in background
+    }
+
+    override fun onNewToken(token: String) {
+        // Token refresh — would send to server in a real deployment
+    }
 }

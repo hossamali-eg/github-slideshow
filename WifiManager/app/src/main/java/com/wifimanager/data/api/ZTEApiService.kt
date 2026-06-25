@@ -152,7 +152,7 @@ class ZTEApiService @Inject constructor() {
                 .ifEmpty { extractStok(body) }
 
             val authenticated = sysauthToken.isNotEmpty() || stok.isNotEmpty() ||
-                    resp.isSuccessful && !body.contains("login", ignoreCase = true).not()
+                    resp.isSuccessful && !body.contains("login", ignoreCase = true)
 
             RouterStatus(
                 isConnected = true,
