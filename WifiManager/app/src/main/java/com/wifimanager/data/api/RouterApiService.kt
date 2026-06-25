@@ -11,9 +11,14 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import java.security.SecureRandom
+import java.security.cert.X509Certificate
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
+import javax.net.ssl.SSLContext
+import javax.net.ssl.TrustManager
+import javax.net.ssl.X509TrustManager
 
 @Singleton
 class RouterApiService @Inject constructor() {
@@ -23,10 +28,24 @@ class RouterApiService @Inject constructor() {
     private var stok = ""  // TP-Link token
     private var csrfToken = ""
 
+    private val trustAllCerts = arrayOf<TrustManager>(object : X509TrustManager {
+        override fun checkClientTrusted(chain: Array<X509Certificate>, authType: String) {}
+        override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) {}
+        override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
+    })
+
+    private val sslContext = SSLContext.getInstance("TLS").also {
+        it.init(null, trustAllCerts, SecureRandom())
+    }
+
     private val client = OkHttpClient.Builder()
+        .sslSocketFactory(sslContext.socketFactory, trustAllCerts[0] as X509TrustManager)
+        .hostnameVerifier { _, _ -> true }
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
         .writeTimeout(10, TimeUnit.SECONDS)
+        .followRedirects(true)
+        .followSslRedirects(true)
         .cookieJar(object : CookieJar {
             private val cookies = mutableListOf<Cookie>()
             override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
