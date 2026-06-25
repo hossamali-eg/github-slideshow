@@ -20,6 +20,15 @@ android {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        release {
+            storeFile file('keystore.jks')
+            storePassword 'WifiManager2024'
+            keyAlias 'wifimanager'
+            keyPassword 'WifiManager2024'
+        }
+    }
+
     buildTypes {
         debug {
             minifyEnabled false
@@ -27,6 +36,7 @@ android {
         }
         release {
             minifyEnabled false
+            signingConfig signingConfigs.release
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }

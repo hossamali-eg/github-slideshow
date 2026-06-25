@@ -51,17 +51,27 @@ jobs:
         working-directory: WifiManager
         run: gradle wrapper --gradle-version=8.4
 
-      - name: Build Debug APK
+      - name: Generate signing keystore
+        working-directory: WifiManager/app
+        run: |
+          keytool -genkeypair -v \
+            -keystore keystore.jks \
+            -alias wifimanager \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=WiFiManager, OU=App, O=WiFiManager, L=Cairo, S=Cairo, C=EG" \
+            -storepass WifiManager2024 -keypass WifiManager2024
+
+      - name: Build Release APK
         working-directory: WifiManager
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleRelease --no-daemon --stacktrace
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: WiFiManager-debug-apk
-          path: WifiManager/app/build/outputs/apk/debug/app-debug.apk
+          name: WiFiManager-release-apk
+          path: WifiManager/app/build/outputs/apk/release/app-release.apk
           retention-days: 30
 
       - name: Print APK size
