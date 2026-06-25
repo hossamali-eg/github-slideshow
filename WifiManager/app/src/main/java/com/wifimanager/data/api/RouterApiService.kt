@@ -23,7 +23,7 @@ import javax.net.ssl.X509TrustManager
 @Singleton
 class RouterApiService @Inject constructor() {
 
-    private var baseUrl = "http://192.168.1.1"
+    private var baseUrl = "https://192.168.1.1"
     private var sessionCookie = ""
     private var stok = ""  // TP-Link token
     private var csrfToken = ""
@@ -57,7 +57,7 @@ class RouterApiService @Inject constructor() {
         .build()
 
     fun configure(ip: String) {
-        baseUrl = "http://$ip"
+        baseUrl = "https://$ip"
     }
 
     // ==================== Authentication ====================

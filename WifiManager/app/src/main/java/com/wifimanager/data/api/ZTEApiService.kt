@@ -36,7 +36,7 @@ import javax.net.ssl.X509TrustManager
 @Singleton
 class ZTEApiService @Inject constructor() {
 
-    private var baseUrl = "http://192.168.1.1"
+    private var baseUrl = "https://192.168.1.1"
     private var sysauthToken = ""
     private var stok = ""
 
@@ -71,7 +71,7 @@ class ZTEApiService @Inject constructor() {
         .build()
 
     fun configure(ip: String) {
-        baseUrl = "http://$ip"
+        baseUrl = "https://$ip"
         cookieStore.clear()
         sysauthToken = ""
         stok = ""
@@ -83,23 +83,84 @@ class ZTEApiService @Inject constructor() {
 
     suspend fun login(username: String, password: String): RouterStatus =
         withContext(Dispatchers.IO) {
-            // Try all methods in order until one succeeds
+            // Smart login: read actual HTML form and submit like a browser
+            val smartResult = trySmartFormLogin(username, password)
+            if (smartResult.isAuthenticated) return@withContext smartResult
 
-            // Method 1: ZTE JSON-RPC with MD5 password (newer firmware)
-            val jsonResult = tryJsonRpcLogin(username, md5(password))
-            if (jsonResult.isAuthenticated) return@withContext jsonResult
+            // Fallback: JSON-RPC (newer firmware)
+            val jsonMd5 = tryJsonRpcLogin(username, md5(password))
+            if (jsonMd5.isAuthenticated) return@withContext jsonMd5
 
-            // Method 2: ZTE JSON-RPC with plain text password
             val jsonPlain = tryJsonRpcLogin(username, password)
             if (jsonPlain.isAuthenticated) return@withContext jsonPlain
 
-            // Method 3: LuCI form with luci_username/luci_password fields
-            val luciResult = tryLuciLogin(username, password)
-            if (luciResult.isAuthenticated) return@withContext luciResult
-
-            // Method 4: ZTE specific web form (H188A typical)
-            tryZteFormLogin(username, password)
+            RouterStatus(isConnected = true, isAuthenticated = false,
+                errorMessage = "اسم المستخدم أو كلمة المرور خاطئة")
         }
+
+    // Reads actual login page HTML and submits with correct form fields
+    private suspend fun trySmartFormLogin(username: String, password: String): RouterStatus {
+        return try {
+            // Step 1: Load the login page as a browser would
+            val pageResp = client.newCall(
+                Request.Builder().url("$baseUrl/").get()
+                    .addHeader("User-Agent", "Mozilla/5.0 (Android)")
+                    .build()
+            ).execute()
+            val html = pageResp.body?.string() ?: ""
+            val pageUrl = pageResp.request.url.toString()
+
+            // Step 2: Find form action URL
+            val actionRegex = Regex("""<form[^>]+action=["']?([^"'\s>]+)["']?""", RegexOption.IGNORE_CASE)
+            val rawAction = actionRegex.find(html)?.groupValues?.getOrElse(1) { "" } ?: ""
+            val postUrl = when {
+                rawAction.startsWith("http") -> rawAction
+                rawAction.startsWith("/")    -> "$baseUrl$rawAction"
+                rawAction.isNotEmpty()       -> "$baseUrl/$rawAction"
+                else                         -> pageUrl
+            }
+
+            // Step 3: Find all <input> field names and build form
+            val inputRegex = Regex("""<input[^>]+name=["']([^"']+)["'][^>]*>""", RegexOption.IGNORE_CASE)
+            val fieldNames = inputRegex.findAll(html).map { it.groupValues[1] }.toList()
+
+            val formBuilder = FormBody.Builder()
+            val usernameFields = setOf("username", "user", "login", "luci_username", "login_n", "uname")
+            val passwordFields = setOf("password", "passwd", "psd", "pass", "luci_password", "login_p", "pwd")
+
+            val addedFields = mutableSetOf<String>()
+            for (field in fieldNames) {
+                val lower = field.lowercase()
+                when {
+                    lower in usernameFields -> { formBuilder.add(field, username); addedFields.add(lower) }
+                    lower in passwordFields -> { formBuilder.add(field, password); addedFields.add(lower) }
+                }
+            }
+            // Always ensure these core fields are present
+            if ("username" !in addedFields) formBuilder.add("username", username)
+            if ("password" !in addedFields) formBuilder.add("password", password)
+            if ("luci_username" !in addedFields) formBuilder.add("luci_username", username)
+            if ("luci_password" !in addedFields) formBuilder.add("luci_password", password)
+
+            // Step 4: POST like a real browser
+            val resp = client.newCall(
+                Request.Builder().url(postUrl).post(formBuilder.build())
+                    .addHeader("Referer", pageUrl)
+                    .addHeader("User-Agent", "Mozilla/5.0 (Android)")
+                    .build()
+            ).execute()
+            val respBody = resp.body?.string() ?: ""
+
+            stok = extractStok(resp.request.url.toString()).ifEmpty { extractStok(respBody) }
+
+            RouterStatus(
+                isConnected = true,
+                isAuthenticated = sysauthToken.isNotEmpty() || stok.isNotEmpty()
+            )
+        } catch (e: Exception) {
+            RouterStatus(isConnected = false, isAuthenticated = false, errorMessage = e.message ?: "")
+        }
+    }
 
     private suspend fun tryJsonRpcLogin(username: String, password: String): RouterStatus {
         return try {
