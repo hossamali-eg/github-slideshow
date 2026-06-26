@@ -3,17 +3,16 @@ package com.wifimanager.ui.login
 import android.annotation.SuppressLint
 import android.content.Context
 import android.net.http.SslError
+import android.view.ViewGroup
 import android.webkit.*
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeout
 import kotlin.coroutines.resume
 
-/**
- * Uses a real WebView (full browser engine + JavaScript) to authenticate
- * with the router. This works with any ZTE firmware regardless of how
- * it hashes the password, because the browser executes the router's own JS.
- */
-class WebViewLoginHelper(private val context: Context) {
+class WebViewLoginHelper(
+    private val context: Context,
+    private val parent: ViewGroup? = null
+) {
 
     data class LoginResult(
         val success: Boolean,
@@ -39,90 +38,157 @@ class WebViewLoginHelper(private val context: Context) {
             webView.settings.apply {
                 javaScriptEnabled = true
                 domStorageEnabled = true
-                userAgentString = "Mozilla/5.0 (Linux; Android 11; Mobile)"
+                userAgentString = "Mozilla/5.0 (Linux; Android 11; Mobile) AppleWebKit/537.36"
             }
 
+            // Attach to parent view so WebView has a proper window context
+            parent?.addView(webView, ViewGroup.LayoutParams(1, 1))
+
             var loginAttempted = false
+            var resumed = false
+
+            fun safeResume(result: LoginResult) {
+                if (!resumed && continuation.isActive) {
+                    resumed = true
+                    continuation.resume(result)
+                }
+            }
 
             webView.webViewClient = object : WebViewClient() {
 
                 override fun onReceivedSslError(
                     view: WebView, handler: SslErrorHandler, error: SslError
                 ) {
-                    handler.proceed() // Accept router's self-signed certificate
+                    handler.proceed()
                 }
 
                 override fun onPageFinished(view: WebView, url: String) {
-                    val cookies = cookieManager.getCookie(baseUrl) ?: ""
+                    // Read cookies from current URL and base URL
+                    val cookies = cookieManager.getCookie(url)?.takeIf { it.isNotEmpty() }
+                        ?: cookieManager.getCookie(baseUrl) ?: ""
 
-                    // Check success by cookie
+                    // Success: sysauth cookie present (LuCI / ZTE standard)
                     if (cookies.contains("sysauth")) {
-                        if (continuation.isActive) {
-                            val stok = extractStok(url).ifEmpty { extractStok(cookies) }
-                            continuation.resume(LoginResult(true, cookies, stok))
+                        val stok = extractStok(url).ifEmpty { extractStok(cookies) }
+                        safeResume(LoginResult(true, cookies, stok))
+                        return
+                    }
+
+                    // Success: stok token in URL
+                    val stok = extractStok(url)
+                    if (stok.isNotEmpty()) {
+                        safeResume(LoginResult(true, cookies, stok))
+                        return
+                    }
+
+                    if (loginAttempted) {
+                        // Determine if we're still on the login page or moved somewhere new
+                        val urlNorm = url.trimEnd('/')
+                        val baseNorm = baseUrl.trimEnd('/')
+                        val isLoginPage = urlNorm == baseNorm ||
+                            url.contains("login", ignoreCase = true) ||
+                            url.contains("index", ignoreCase = true)
+
+                        if (!isLoginPage) {
+                            // Navigated away from login page — treat as success
+                            safeResume(LoginResult(true, cookies, ""))
+                        } else {
+                            // Back on the same login page — wrong credentials
+                            safeResume(LoginResult(false, errorMessage = "اسم المستخدم أو كلمة المرور غير صحيحة"))
                         }
                         return
                     }
 
-                    // Check success by URL stok token
-                    val stok = extractStok(url)
-                    if (stok.isNotEmpty()) {
-                        if (continuation.isActive)
-                            continuation.resume(LoginResult(true, cookies, stok))
-                        return
-                    }
-
-                    // If already tried to login, we got a response but no session
-                    if (loginAttempted) {
-                        if (continuation.isActive)
-                            continuation.resume(LoginResult(false, errorMessage = "اسم المستخدم أو كلمة المرور غير صحيحة"))
-                        return
-                    }
-
-                    // First page load: inject JS to fill and submit login form
+                    // First page load: wait 600ms for the page JS to fully initialize, then fill form
                     loginAttempted = true
-                    val js = """
-                        (function() {
-                            // Try all common field names for ZTE routers
-                            var userFields = ['username','luci_username','user','login_n','uname'];
-                            var passFields = ['psd','password','luci_password','passwd','pass','login_p','pwd'];
-
-                            for (var i = 0; i < userFields.length; i++) {
-                                var u = document.querySelector('input[name="' + userFields[i] + '"]');
-                                if (u) { u.value = '${username.replace("'", "\\'")}'; break; }
-                            }
-                            for (var i = 0; i < passFields.length; i++) {
-                                var p = document.querySelector('input[name="' + passFields[i] + '"]');
-                                if (p) { p.value = '${password.replace("'", "\\'")}'; break; }
-                            }
-
-                            // Submit the form
-                            var btn = document.querySelector(
-                                'button[type="submit"],input[type="submit"],button.login-btn,.login-btn'
-                            );
-                            if (btn) {
-                                btn.click();
-                            } else if (document.forms.length > 0) {
-                                document.forms[0].submit();
-                            }
-                        })();
-                    """.trimIndent()
-                    view.evaluateJavascript(js, null)
+                    view.postDelayed({
+                        if (!resumed && continuation.isActive) {
+                            injectLoginJs(view, username, password)
+                        }
+                    }, 600)
                 }
 
                 override fun onReceivedError(
-                    view: WebView, errorCode: Int, description: String, url: String
+                    view: WebView, errorCode: Int, description: String, failingUrl: String
                 ) {
-                    if (continuation.isActive)
-                        continuation.resume(LoginResult(false, errorMessage = "تعذر الاتصال بالراوتر: $description"))
+                    if (failingUrl == "$baseUrl/" || failingUrl == baseUrl) {
+                        safeResume(LoginResult(false, errorMessage = "تعذر الاتصال بالراوتر: $description"))
+                    }
                 }
             }
 
-            continuation.invokeOnCancellation { webView.destroy() }
+            continuation.invokeOnCancellation {
+                parent?.removeView(webView)
+                webView.destroy()
+            }
+
             webView.loadUrl("$baseUrl/")
         }
     }
 
+    private fun injectLoginJs(view: WebView, username: String, password: String) {
+        val safeUser = username.replace("\\", "\\\\").replace("'", "\\'")
+        val safePass = password.replace("\\", "\\\\").replace("'", "\\'")
+
+        val js = """
+            (function() {
+                var userFields = ['username','luci_username','user','login_n','uname'];
+                var passFields = ['psd','password','luci_password','passwd','pass','login_p','pwd'];
+
+                var userEl = null, passEl = null;
+
+                for (var i = 0; i < userFields.length; i++) {
+                    userEl = document.querySelector(
+                        'input[name="' + userFields[i] + '"], input[id="' + userFields[i] + '"]');
+                    if (userEl) break;
+                }
+                for (var i = 0; i < passFields.length; i++) {
+                    passEl = document.querySelector(
+                        'input[name="' + passFields[i] + '"], input[id="' + passFields[i] + '"]');
+                    if (passEl) break;
+                }
+
+                // Type-based fallbacks if named fields not found
+                if (!userEl) userEl = document.querySelector('input[type="text"]:not([type="hidden"])');
+                if (!passEl) passEl = document.querySelector('input[type="password"]');
+
+                function fillField(el, val) {
+                    if (!el) return;
+                    el.removeAttribute('readonly');
+                    el.removeAttribute('disabled');
+                    el.value = val;
+                    el.dispatchEvent(new Event('focus',  {bubbles: true}));
+                    el.dispatchEvent(new Event('input',  {bubbles: true}));
+                    el.dispatchEvent(new Event('change', {bubbles: true}));
+                    el.dispatchEvent(new Event('blur',   {bubbles: true}));
+                }
+
+                fillField(userEl, '$safeUser');
+                fillField(passEl, '$safePass');
+
+                // Click submit button 300ms after filling (gives change events time to settle)
+                setTimeout(function() {
+                    var btn = document.querySelector(
+                        'button[type="submit"], input[type="submit"], ' +
+                        'button.login-btn, .login-btn, .btn-login, ' +
+                        '#login_btn, #btnLogin, #submitBtn, ' +
+                        'button[onclick], form button, form input[type="button"]'
+                    );
+                    if (btn) {
+                        btn.click();
+                    } else {
+                        var frm = document.querySelector('form');
+                        if (frm) {
+                            var evt = new Event('submit', {bubbles: true, cancelable: true});
+                            if (frm.dispatchEvent(evt)) frm.submit();
+                        }
+                    }
+                }, 300);
+            })();
+        """.trimIndent()
+        view.evaluateJavascript(js, null)
+    }
+
     private fun extractStok(text: String): String =
-        Regex("stok=([a-f0-9]+)").find(text)?.groupValues?.getOrElse(1) { "" } ?: ""
+        Regex("stok=([a-fA-F0-9]+)").find(text)?.groupValues?.getOrElse(1) { "" } ?: ""
 }

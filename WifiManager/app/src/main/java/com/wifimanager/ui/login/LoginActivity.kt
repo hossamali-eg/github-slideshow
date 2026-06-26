@@ -3,6 +3,7 @@ package com.wifimanager.ui.login
 import android.content.Intent
 import android.os.Bundle
 import android.view.View
+import android.view.ViewGroup
 import android.widget.ArrayAdapter
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
@@ -140,7 +141,7 @@ class LoginActivity : AppCompatActivity() {
                 binding.btnConnect.isEnabled = false
                 lifecycleScope.launch {
                     val result = try {
-                        WebViewLoginHelper(this@LoginActivity).login(ip, username, password)
+                        WebViewLoginHelper(this@LoginActivity, binding.root as? ViewGroup).login(ip, username, password)
                     } catch (e: Exception) {
                         WebViewLoginHelper.LoginResult(false, errorMessage = e.message ?: "خطأ في الاتصال")
                     }
