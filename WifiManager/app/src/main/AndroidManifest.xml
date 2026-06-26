@@ -47,6 +47,11 @@
             android:exported="false"
             android:theme="@style/Theme.WiFiManager" />
 
+        <activity
+            android:name=".ui.login.RouterWebViewActivity"
+            android:exported="false"
+            android:theme="@style/Theme.WiFiManager" />
+
         <!-- Background Service -->
         <service
             android:name=".service.RouterMonitorService"
