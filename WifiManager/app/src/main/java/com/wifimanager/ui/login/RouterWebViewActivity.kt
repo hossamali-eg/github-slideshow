@@ -6,6 +6,8 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.net.http.SslError
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
 import android.view.View
 import android.webkit.*
@@ -20,7 +22,11 @@ class RouterWebViewActivity : AppCompatActivity() {
         const val EXTRA_PASSWORD = "password"
         const val RESULT_COOKIES = "cookies"
         const val RESULT_STOK    = "stok"
+
+        private const val AUTO_TIMEOUT_MS = 12_000L
     }
+
+    private var returned = false
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -32,16 +38,57 @@ class RouterWebViewActivity : AppCompatActivity() {
 
         var baseUrl = "https://$ip"
         var httpsFailed = false
+        var loginAttempted = false
+        var manualMode = false
 
         val cookieManager = CookieManager.getInstance()
         cookieManager.setAcceptCookie(true)
         cookieManager.removeAllCookies(null)
 
-        // ── Build layout ──────────────────────────────────────────────────────
+        // ── Root layout ───────────────────────────────────────────────────────
         val root = FrameLayout(this)
 
-        val column = LinearLayout(this).apply {
+        // ── Loading overlay (shown first) ─────────────────────────────────────
+        val loadingOverlay = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setBackgroundColor(Color.parseColor("#1A237E"))
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        }
+
+        val spinner = ProgressBar(this).apply {
+            isIndeterminate = true
+            @Suppress("DEPRECATION")
+            indeterminateDrawable.setColorFilter(Color.WHITE, android.graphics.PorterDuff.Mode.SRC_IN)
+        }
+
+        val loadingTitle = TextView(this).apply {
+            text = "جاري تسجيل الدخول..."
+            textSize = 18f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            setPadding(0, 36, 0, 0)
+        }
+
+        val loadingSubtitle = TextView(this).apply {
+            text = "يتم الاتصال بالراوتر تلقائياً"
+            textSize = 13f
+            setTextColor(Color.parseColor("#90CAF9"))
+            gravity = Gravity.CENTER
+            setPadding(0, 10, 0, 0)
+        }
+
+        loadingOverlay.addView(spinner)
+        loadingOverlay.addView(loadingTitle)
+        loadingOverlay.addView(loadingSubtitle)
+
+        // ── Manual fallback layout (hidden unless auto-login times out) ───────
+        val manualColumn = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = View.GONE
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT
@@ -57,8 +104,9 @@ class RouterWebViewActivity : AppCompatActivity() {
             setTextColor(Color.WHITE)
         }
 
-        val progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+        val pageProgress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
             isIndeterminate = true
+            visibility = View.GONE
         }
 
         val webView = WebView(this).apply {
@@ -67,20 +115,21 @@ class RouterWebViewActivity : AppCompatActivity() {
             )
         }
 
-        // ── "Continue" button ─────────────────────────────────────────────────
         val continueBtn = Button(this).apply {
-            text = "✓  دخلت بنجاح — تابع للتطبيق"
+            text = "✓  دخلت بنجاح — انتقل للوحة التحكم"
             textSize = 15f
             setTextColor(Color.WHITE)
             setBackgroundColor(Color.parseColor("#2E7D32"))
             setPadding(0, 24, 0, 24)
         }
 
-        column.addView(banner)
-        column.addView(progress)
-        column.addView(webView)
-        column.addView(continueBtn)
-        root.addView(column)
+        manualColumn.addView(banner)
+        manualColumn.addView(pageProgress)
+        manualColumn.addView(webView)
+        manualColumn.addView(continueBtn)
+
+        root.addView(manualColumn)
+        root.addView(loadingOverlay)
         setContentView(root)
 
         // ── WebView settings ──────────────────────────────────────────────────
@@ -91,8 +140,18 @@ class RouterWebViewActivity : AppCompatActivity() {
             mixedContentMode  = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
         }
 
-        var prefilled = false
+        // ── Auto-timeout: show manual mode if auto-login doesn't complete ─────
+        val handler = Handler(Looper.getMainLooper())
+        val timeoutRunnable = Runnable {
+            if (!returned) {
+                manualMode = true
+                loadingOverlay.visibility = View.GONE
+                manualColumn.visibility = View.VISIBLE
+            }
+        }
+        handler.postDelayed(timeoutRunnable, AUTO_TIMEOUT_MS)
 
+        // ── WebViewClient ─────────────────────────────────────────────────────
         webView.webViewClient = object : WebViewClient() {
 
             override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: SslError) {
@@ -100,29 +159,47 @@ class RouterWebViewActivity : AppCompatActivity() {
             }
 
             override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
-                progress.visibility = View.VISIBLE
+                if (manualMode) pageProgress.visibility = View.VISIBLE
             }
 
             override fun onPageFinished(view: WebView, url: String) {
-                progress.visibility = View.GONE
+                if (manualMode) pageProgress.visibility = View.GONE
 
-                // Auto-detect login success via cookie or stok URL token
+                if (returned) return
+
                 val cookies = cookieManager.getCookie(url)?.takeIf { it.isNotEmpty() }
                     ?: cookieManager.getCookie(baseUrl) ?: ""
                 val stok = Regex("stok=([a-fA-F0-9]+)")
                     .find(url)?.groupValues?.getOrElse(1) { "" } ?: ""
 
+                // Success via cookie or stok token
                 if (cookies.contains("sysauth") || stok.isNotEmpty()) {
+                    handler.removeCallbacks(timeoutRunnable)
                     returnSuccess(cookies, stok)
                     return
                 }
 
-                // Pre-fill form fields once
-                if (!prefilled) {
-                    prefilled = true
+                val normalizedUrl = url.trimEnd('/')
+                val normalizedBase = baseUrl.trimEnd('/')
+
+                if (!loginAttempted) {
+                    loginAttempted = true
+                    // First page load — attempt auto-fill + auto-submit
                     view.postDelayed({
-                        view.evaluateJavascript(buildFillJs(username, password), null)
-                    }, 700)
+                        view.evaluateJavascript(buildAutoLoginJs(username, password), null)
+                    }, 800)
+                } else {
+                    // Subsequent page load — check if we moved away from login page
+                    val stillOnLogin = normalizedUrl == normalizedBase ||
+                        url.contains("login", ignoreCase = true) ||
+                        url.endsWith("/index.html") ||
+                        url == "$normalizedBase/"
+
+                    if (!stillOnLogin) {
+                        // Navigated away from login → treat as success
+                        handler.removeCallbacks(timeoutRunnable)
+                        returnSuccess(cookies, stok)
+                    }
                 }
             }
 
@@ -131,15 +208,17 @@ class RouterWebViewActivity : AppCompatActivity() {
             ) {
                 if (!httpsFailed && failingUrl.startsWith("https://")) {
                     httpsFailed = true
+                    loginAttempted = false
                     baseUrl = "http://$ip"
-                    prefilled = false
-                    banner.text = "⬇ جاري الاتصال بـ http — سجّل دخولك ثم اضغط الزر الأخضر"
+                    if (manualMode) {
+                        banner.text = "⬇ جاري الاتصال بـ http — سجّل دخولك ثم اضغط الزر الأخضر"
+                    }
                     view.loadUrl(baseUrl)
                 }
             }
         }
 
-        // ── Manual continue button ────────────────────────────────────────────
+        // ── Manual "continue" button ──────────────────────────────────────────
         continueBtn.setOnClickListener {
             val url = webView.url ?: baseUrl
             val cookies = cookieManager.getCookie(url)?.takeIf { it.isNotEmpty() }
@@ -153,6 +232,8 @@ class RouterWebViewActivity : AppCompatActivity() {
     }
 
     private fun returnSuccess(cookies: String, stok: String) {
+        if (returned) return
+        returned = true
         val result = Intent().apply {
             putExtra(RESULT_COOKIES, cookies)
             putExtra(RESULT_STOK, stok)
@@ -161,20 +242,56 @@ class RouterWebViewActivity : AppCompatActivity() {
         finish()
     }
 
-    private fun buildFillJs(username: String, password: String): String {
+    private fun buildAutoLoginJs(username: String, password: String): String {
         val u = username.replace("\\", "\\\\").replace("'", "\\'")
         val p = password.replace("\\", "\\\\").replace("'", "\\'")
         return """
             (function() {
                 var uf = ['username','luci_username','user','login_n','uname'];
-                var pf = ['psd','password','luci_password','passwd','pass'];
+                var pf = ['psd','password','luci_password','passwd','pass','login_p','pwd'];
                 var ue = null, pe = null;
-                for (var i=0;i<uf.length;i++){ue=document.querySelector('input[name="'+uf[i]+'"],input[id="'+uf[i]+'"]');if(ue)break;}
-                for (var i=0;i<pf.length;i++){pe=document.querySelector('input[name="'+pf[i]+'"],input[id="'+pf[i]+'"]');if(pe)break;}
-                if(!ue) ue=document.querySelector('input[type="text"]');
+                for (var i=0;i<uf.length;i++){
+                    ue=document.querySelector('input[name="'+uf[i]+'"],input[id="'+uf[i]+'"]');
+                    if(ue) break;
+                }
+                for (var i=0;i<pf.length;i++){
+                    pe=document.querySelector('input[name="'+pf[i]+'"],input[id="'+pf[i]+'"]');
+                    if(pe) break;
+                }
+                if(!ue) ue=document.querySelector('input[type="text"]:not([type="hidden"])');
                 if(!pe) pe=document.querySelector('input[type="password"]');
-                if(ue){ue.value='$u';ue.dispatchEvent(new Event('input',{bubbles:true}));}
-                if(pe){pe.value='$p';pe.dispatchEvent(new Event('input',{bubbles:true}));}
+
+                function fill(el, val) {
+                    if(!el) return;
+                    el.removeAttribute('readonly');
+                    el.removeAttribute('disabled');
+                    el.value = val;
+                    el.dispatchEvent(new Event('focus',  {bubbles:true}));
+                    el.dispatchEvent(new Event('input',  {bubbles:true}));
+                    el.dispatchEvent(new Event('change', {bubbles:true}));
+                    el.dispatchEvent(new Event('blur',   {bubbles:true}));
+                }
+
+                fill(ue, '$u');
+                fill(pe, '$p');
+
+                setTimeout(function() {
+                    var btn = document.querySelector(
+                        'button[type="submit"], input[type="submit"], ' +
+                        'button.login-btn, .login-btn, .btn-login, #login_btn, ' +
+                        '#btnLogin, #submitBtn, button[onclick], ' +
+                        'form button, form input[type="button"]'
+                    );
+                    if(btn) {
+                        btn.click();
+                    } else {
+                        var frm = document.querySelector('form');
+                        if(frm) {
+                            var e = new Event('submit', {bubbles:true, cancelable:true});
+                            if(frm.dispatchEvent(e)) frm.submit();
+                        }
+                    }
+                }, 500);
             })();
         """.trimIndent()
     }
