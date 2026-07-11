@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>لوحة تحكم الراوتر</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #0d1117;
+    --card:     #161b22;
+    --border:   #21262d;
+    --blue:     #1f6feb;
+    --green:    #238636;
+    --red:      #da3633;
+    --yellow:   #d29922;
+    --text:     #e6edf3;
+    --muted:    #8b949e;
+    --radius:   12px;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+    min-height: 100vh;
+  }
+
+  /* ── Header ── */
+  header {
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .logo { font-size: 20px; font-weight: 700; color: var(--blue); }
+  .logo span { color: var(--text); font-size: 13px; margin-right: 10px; }
+  .router-badge {
+    background: #0d2137; color: var(--blue);
+    border: 1px solid var(--blue); border-radius: 20px;
+    padding: 4px 12px; font-size: 13px; direction: ltr;
+  }
+  #conn-dot {
+    display: inline-block; width: 8px; height: 8px;
+    border-radius: 50%; background: var(--muted);
+    margin-left: 6px; vertical-align: middle;
+    transition: background .4s;
+  }
+  #conn-dot.ok  { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  #conn-dot.err { background: var(--red); }
+
+  /* ── Main grid ── */
+  main { max-width: 1100px; margin: 0 auto; padding: 24px 16px; }
+
+  /* ── Stat cards ── */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px; margin-bottom: 24px;
+  }
+  .stat-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px;
+    position: relative; overflow: hidden;
+    transition: border-color .3s;
+  }
+  .stat-card:hover { border-color: var(--blue); }
+  .stat-card .label { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+  .stat-card .value { font-size: 28px; font-weight: 700; direction: ltr; text-align: right; }
+  .stat-card .unit  { font-size: 12px; color: var(--muted); direction: ltr; }
+  .stat-card .icon  {
+    position: absolute; top: 16px; left: 16px;
+    font-size: 24px; opacity: .4;
+  }
+
+  /* ── Internet toggle card ── */
+  .internet-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 24px;
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 24px;
+    transition: border-color .3s;
+  }
+  .internet-card.on  { border-color: var(--green); }
+  .internet-card.off { border-color: var(--red); }
+  .internet-info h2 { font-size: 18px; margin-bottom: 6px; }
+  .internet-info p  { font-size: 14px; color: var(--muted); }
+  .status-badge {
+    display: inline-block; border-radius: 20px;
+    padding: 3px 12px; font-size: 13px; font-weight: 600;
+    margin-top: 6px;
+  }
+  .status-badge.on  { background:#0d3321; color:#3fb950; border:1px solid #238636; }
+  .status-badge.off { background:#3d0c0b; color:#ff7b72; border:1px solid #da3633; }
+
+  /* Toggle switch */
+  .toggle-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .toggle-label { font-size: 12px; color: var(--muted); }
+  .toggle {
+    position: relative; width: 64px; height: 34px;
+    cursor: pointer; user-select: none;
+  }
+  .toggle input { display: none; }
+  .toggle-track {
+    width: 100%; height: 100%; border-radius: 34px;
+    background: #3d0c0b; transition: background .3s;
+    border: 1px solid var(--red);
+  }
+  .toggle input:checked ~ .toggle-track {
+    background: #0d3321; border-color: var(--green);
+  }
+  .toggle-thumb {
+    position: absolute; top: 4px; right: 4px;
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--red); transition: all .3s;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+  }
+  .toggle input:checked ~ .toggle-thumb {
+    right: calc(100% - 30px); background: var(--green);
+  }
+
+  /* ── Section header ── */
+  .section-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .section-header h2 { font-size: 16px; font-weight: 600; }
+  .badge {
+    background: #1f6feb22; color: var(--blue);
+    border: 1px solid #1f6feb55;
+    border-radius: 20px; padding: 2px 10px; font-size: 12px;
+  }
+  .btn-refresh {
+    background: none; border: 1px solid var(--border);
+    color: var(--muted); border-radius: 8px;
+    padding: 6px 14px; font-size: 13px; cursor: pointer;
+    transition: all .2s; font-family: inherit;
+  }
+  .btn-refresh:hover { border-color: var(--blue); color: var(--blue); }
+  .btn-refresh.spinning { animation: spin .6s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Device list ── */
+  .device-list { display: flex; flex-direction: column; gap: 10px; }
+
+  .device-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px 18px;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; transition: border-color .2s;
+    animation: fadeIn .3s ease;
+  }
+  @keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+  .device-card:hover { border-color: #30363d; }
+  .device-card.blocked { border-color: #da363355; background: #1a0808; }
+
+  .device-icon { font-size: 28px; flex-shrink: 0; }
+  .device-info { flex: 1; min-width: 0; }
+  .device-name {
+    font-size: 15px; font-weight: 600;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    direction: ltr; text-align: right;
+  }
+  .device-meta { font-size: 12px; color: var(--muted); direction: ltr; text-align: right; }
+
+  .device-dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--green); flex-shrink: 0;
+    box-shadow: 0 0 6px var(--green);
+  }
+  .device-dot.offline { background: var(--muted); box-shadow: none; }
+
+  .device-actions { display: flex; gap: 8px; flex-shrink: 0; }
+  .btn-block {
+    border-radius: 8px; padding: 6px 14px; font-size: 13px;
+    cursor: pointer; font-family: inherit; font-weight: 600;
+    border: none; transition: all .2s;
+  }
+  .btn-block.block   { background:#3d0c0b; color:#ff7b72; }
+  .btn-block.block:hover { background:#da3633; color:#fff; }
+  .btn-block.unblock { background:#0d3321; color:#3fb950; }
+  .btn-block.unblock:hover { background:#238636; color:#fff; }
+
+  /* ── Empty / Loading states ── */
+  .empty {
+    text-align: center; padding: 48px 16px;
+    color: var(--muted); font-size: 14px;
+  }
+  .empty .icon { font-size: 48px; margin-bottom: 12px; opacity: .4; }
+
+  .skeleton {
+    background: linear-gradient(90deg, var(--card) 25%, #1f262e 50%, var(--card) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.2s infinite;
+    border-radius: var(--radius); height: 70px;
+  }
+  @keyframes shimmer { to { background-position: -200% 0; } }
+
+  /* ── Footer ── */
+  footer {
+    text-align: center; padding: 24px;
+    color: var(--muted); font-size: 12px;
+    border-top: 1px solid var(--border); margin-top: 40px;
+  }
+  #last-update { color: var(--muted); font-size: 12px; }
+
+  /* ── Router login modal ── */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: #000a; z-index: 200;
+    align-items: center; justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 28px;
+    width: 90%; max-width: 420px;
+  }
+  .modal h3 { margin-bottom: 16px; }
+  .modal input {
+    width: 100%; padding: 10px 14px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--bg);
+    color: var(--text); font-size: 14px; margin-bottom: 12px;
+    font-family: inherit; direction: ltr;
+  }
+  .modal-actions { display: flex; gap: 10px; margin-top: 4px; }
+  .btn-primary {
+    flex: 1; background: var(--blue); color: #fff;
+    border: none; border-radius: 8px; padding: 10px;
+    font-size: 14px; font-weight: 600; cursor: pointer;
+    font-family: inherit; transition: opacity .2s;
+  }
+  .btn-primary:hover { opacity: .85; }
+  .btn-secondary {
+    background: none; border: 1px solid var(--border);
+    color: var(--muted); border-radius: 8px; padding: 10px 16px;
+    font-size: 14px; cursor: pointer; font-family: inherit;
+  }
+
+  /* Responsive */
+  @media (max-width: 600px) {
+    .device-card { flex-wrap: wrap; }
+    .stats-row { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<header>
+  <div class="logo">
+    📡 WiFi Manager
+    <span>لوحة تحكم الراوتر</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <span id="last-update"></span>
+    <div class="router-badge">
+      <span id="conn-dot"></span>
+      {{ router_ip }}
+    </div>
+    <button class="btn-refresh" onclick="openLoginModal()" title="إعدادات الاتصال">⚙️</button>
+  </div>
+</header>
+
+<main>
+
+  <!-- ── Internet Toggle ── -->
+  <div class="internet-card" id="internet-card">
+    <div class="internet-info">
+      <h2>🌐 الإنترنت</h2>
+      <div id="internet-badge" class="status-badge on">مفعّل</div>
+      <p style="margin-top:6px;" id="internet-sub">يعمل بشكل طبيعي</p>
+    </div>
+    <div class="toggle-wrap">
+      <span class="toggle-label">تشغيل / إيقاف</span>
+      <label class="toggle">
+        <input type="checkbox" id="internet-toggle" checked onchange="toggleInternet(this.checked)">
+        <div class="toggle-track"></div>
+        <div class="toggle-thumb">⚡</div>
+      </label>
+    </div>
+  </div>
+
+  <!-- ── Stats ── -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="icon">⬇️</div>
+      <div class="label">التحميل</div>
+      <div class="value" id="stat-down">0.0</div>
+      <div class="unit">Mbps</div>
+    </div>
+    <div class="stat-card">
+      <div class="icon">⬆️</div>
+      <div class="label">الرفع</div>
+      <div class="value" id="stat-up">0.0</div>
+      <div class="unit">Mbps</div>
+    </div>
+    <div class="stat-card">
+      <div class="icon">📱</div>
+      <div class="label">أجهزة متصلة</div>
+      <div class="value" id="stat-devices">—</div>
+      <div class="unit">جهاز</div>
+    </div>
+    <div class="stat-card">
+      <div class="icon">🚫</div>
+      <div class="label">أجهزة محجوبة</div>
+      <div class="value" id="stat-blocked">0</div>
+      <div class="unit">جهاز</div>
+    </div>
+  </div>
+
+  <!-- ── Devices ── -->
+  <div class="section-header">
+    <h2>الأجهزة المتصلة <span class="badge" id="devices-badge">جاري الفحص...</span></h2>
+    <button class="btn-refresh" id="refresh-btn" onclick="loadDevices(true)">🔄 تحديث</button>
+  </div>
+
+  <div class="device-list" id="device-list">
+    <div class="skeleton"></div>
+    <div class="skeleton"></div>
+    <div class="skeleton"></div>
+  </div>
+
+</main>
+
+<footer>
+  WiFi Manager Dashboard — ZTE ZXHN H188A &nbsp;|&nbsp; يتحدث كل 15 ثانية
+</footer>
+
+<!-- ── Router Login Modal ── -->
+<div class="modal-overlay" id="login-modal">
+  <div class="modal">
+    <h3>⚙️ إعدادات الراوتر</h3>
+    <input type="text"     id="m-ip"   placeholder="IP الراوتر (مثال: 192.168.1.1)" value="{{ router_ip }}">
+    <input type="text"     id="m-user" placeholder="اسم المستخدم" value="admin">
+    <input type="password" id="m-pass" placeholder="كلمة المرور">
+    <div class="modal-actions">
+      <button class="btn-primary" onclick="doRouterLogin()">🔗 اتصال</button>
+      <button class="btn-secondary" onclick="closeLoginModal()">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── State ────────────────────────────────────────────────────────────────────
+let internetOn  = true;
+let blockedMacs = new Set();
+let allDevices  = [];
+
+// ── Icons by hostname/IP ──────────────────────────────────────────────────────
+function deviceIcon(d) {
+  const n = (d.hostname || '').toLowerCase();
+  if (n.includes('iphone') || n.includes('ipad'))  return '🍎';
+  if (n.includes('android') || n.includes('samsung') || n.includes('huawei')) return '📱';
+  if (n.includes('mac') || n.includes('macbook'))  return '💻';
+  if (n.includes('pc') || n.includes('desktop') || n.includes('windows')) return '🖥️';
+  if (n.includes('tv') || n.includes('smart'))     return '📺';
+  if (n.includes('xbox') || n.includes('ps'))      return '🎮';
+  if (n.includes('camera') || n.includes('cam'))   return '📷';
+  if (n.includes('printer'))                        return '🖨️';
+  return '📡';
+}
+
+// ── Load Devices ─────────────────────────────────────────────────────────────
+async function loadDevices(manual = false) {
+  const btn = document.getElementById('refresh-btn');
+  if (manual) btn.textContent = '🔄 جاري...';
+
+  try {
+    const res  = await fetch('/api/devices');
+    allDevices = await res.json();
+    renderDevices();
+  } catch (e) {
+    document.getElementById('device-list').innerHTML =
+      '<div class="empty"><div class="icon">⚠️</div>تعذر الاتصال بالخادم</div>';
+  }
+
+  if (manual) {
+    setTimeout(() => btn.textContent = '🔄 تحديث', 800);
+  }
+  document.getElementById('last-update').textContent =
+    'آخر تحديث: ' + new Date().toLocaleTimeString('ar-EG');
+}
+
+function renderDevices() {
+  const list = document.getElementById('device-list');
+  if (!allDevices.length) {
+    list.innerHTML = '<div class="empty"><div class="icon">📡</div>لا توجد أجهزة — تأكد من اتصالك بنفس الشبكة</div>';
+    document.getElementById('devices-badge').textContent = '0 جهاز';
+    document.getElementById('stat-devices').textContent = '0';
+    return;
+  }
+
+  const blocked = allDevices.filter(d => d.blocked || blockedMacs.has(d.mac));
+  document.getElementById('devices-badge').textContent  = allDevices.length + ' جهاز';
+  document.getElementById('stat-devices').textContent   = allDevices.length;
+  document.getElementById('stat-blocked').textContent   = blocked.length;
+
+  list.innerHTML = allDevices.map(d => {
+    const isBlocked = d.blocked || blockedMacs.has(d.mac);
+    const name = d.hostname !== d.ip ? d.hostname : `جهاز (${d.ip})`;
+    return `
+    <div class="device-card ${isBlocked ? 'blocked' : ''}">
+      <div class="device-icon">${deviceIcon(d)}</div>
+      <div class="device-info">
+        <div class="device-name">${escHtml(name)}</div>
+        <div class="device-meta">${d.ip} &nbsp;|&nbsp; ${d.mac}</div>
+      </div>
+      <div class="device-dot ${d.online ? '' : 'offline'}"></div>
+      <div class="device-actions">
+        <button class="btn-block ${isBlocked ? 'unblock' : 'block'}"
+          onclick="blockDevice('${d.mac}', ${!isBlocked})">
+          ${isBlocked ? '✅ فتح' : '🚫 حجب'}
+        </button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── Block Device ──────────────────────────────────────────────────────────────
+async function blockDevice(mac, block) {
+  const btn = event.target;
+  btn.disabled = true; btn.textContent = '...';
+
+  try {
+    const res  = await fetch('/api/block', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ mac, block })
+    });
+    const data = await res.json();
+    if (data.success) {
+      if (block) blockedMacs.add(mac); else blockedMacs.delete(mac);
+      // Update the specific device in allDevices
+      allDevices = allDevices.map(d => d.mac === mac ? {...d, blocked: block} : d);
+      renderDevices();
+    }
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = block ? '🚫 حجب' : '✅ فتح';
+  }
+}
+
+// ── Internet Toggle ───────────────────────────────────────────────────────────
+async function toggleInternet(enabled) {
+  const card   = document.getElementById('internet-card');
+  const badge  = document.getElementById('internet-badge');
+  const sub    = document.getElementById('internet-sub');
+
+  badge.className = 'status-badge ' + (enabled ? 'on' : 'off');
+  badge.textContent = enabled ? 'مفعّل' : 'موقف';
+  card.className = 'internet-card ' + (enabled ? 'on' : 'off');
+  sub.textContent = enabled ? 'يعمل بشكل طبيعي' : 'الإنترنت متوقف';
+
+  try {
+    await fetch('/api/internet', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ enabled })
+    });
+  } catch (e) {}
+}
+
+// ── Status Polling ────────────────────────────────────────────────────────────
+async function loadStatus() {
+  try {
+    const res  = await fetch('/api/status');
+    const data = await res.json();
+
+    // Connection dot
+    const dot = document.getElementById('conn-dot');
+    dot.className = data.router_connected ? 'ok' : 'err';
+
+    // Speed stats
+    document.getElementById('stat-down').textContent =
+      data.download !== undefined ? data.download.toFixed(1) : '—';
+    document.getElementById('stat-up').textContent =
+      data.upload !== undefined ? data.upload.toFixed(1) : '—';
+
+    // Sync internet state if changed externally
+    if (data.internet !== undefined && data.internet !== internetOn) {
+      internetOn = data.internet;
+      document.getElementById('internet-toggle').checked = internetOn;
+      toggleInternet(internetOn);
+    }
+  } catch (e) {
+    document.getElementById('conn-dot').className = 'err';
+  }
+}
+
+// ── Router Login Modal ────────────────────────────────────────────────────────
+function openLoginModal()  { document.getElementById('login-modal').classList.add('open'); }
+function closeLoginModal() { document.getElementById('login-modal').classList.remove('open'); }
+
+async function doRouterLogin() {
+  const ip   = document.getElementById('m-ip').value.trim();
+  const user = document.getElementById('m-user').value.trim();
+  const pass = document.getElementById('m-pass').value;
+
+  try {
+    const res  = await fetch('/api/router_login', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ ip, username: user, password: pass })
+    });
+    const data = await res.json();
+    closeLoginModal();
+    loadStatus();
+    alert(data.success ? '✅ تم الاتصال بالراوتر!' : '⚠️ فشل الاتصال، الأجهزة ستُحدَّث من ARP');
+  } catch (e) {
+    alert('خطأ في الاتصال');
+  }
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+(function init() {
+  loadDevices();
+  loadStatus();
+  // Refresh devices every 15 s, status every 10 s
+  setInterval(loadDevices, 15_000);
+  setInterval(loadStatus,  10_000);
+})();
+</script>
+</body>
+</html>
