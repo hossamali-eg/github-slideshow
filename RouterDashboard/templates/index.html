@@ -292,17 +292,43 @@ let devices = [];
 
 // ── Icons ────────────────────────────────────────────────────────────────────
 function icon(d) {
+  const t = d.device_type || '';
+  const v = (d.vendor || '').toLowerCase();
   const n = (d.hostname||'').toLowerCase();
-  if(n.includes('iphone')||n.includes('ipad')||n.includes('apple')) return '🍎';
-  if(n.includes('android')||n.includes('samsung')||n.includes('huawei')||n.includes('oppo')||n.includes('reno')) return '📱';
+  // OUI-based detection (most reliable)
+  if(t==='iphone')  return '';
+  if(t==='mac')     return '💻';
+  if(t==='tv')      return '📺';
+  if(t==='router')  return '📡';
+  if(t==='laptop')  return '💻';
+  if(t==='desktop') return '🖥️';
+  if(t==='phone')   return v==='samsung'?'📱':v.includes('xiaomi')||v.includes('redmi')?'📱':v==='huawei'||v==='honor'?'📱':v==='oppo'||v==='realme'?'📱':'📱';
+  // Fallback: hostname-based
+  if(n.includes('iphone')||n.includes('ipad')) return '';
   if(n.includes('mac')||n.includes('macbook')) return '💻';
+  if(n.includes('android')||n.includes('samsung')||n.includes('huawei')||n.includes('oppo')) return '📱';
   if(n.includes('windows')||n.includes('desktop')||n.includes('pc')) return '🖥️';
-  if(n.includes('tv')||n.includes('smart')||n.includes('vision')) return '📺';
-  if(n.includes('xbox')||n.includes('ps')||n.includes('play')) return '🎮';
+  if(n.includes('tv')||n.includes('smart')) return '📺';
+  if(n.includes('xbox')||n.includes('ps5')||n.includes('play')) return '🎮';
   if(n.includes('camera')||n.includes('cam')) return '📷';
   if(n.includes('printer')) return '🖨️';
-  if(n.includes('router')||n.includes('gateway')) return '🔧';
-  return '📡';
+  if(n.includes('router')||n.includes('gateway')) return '📡';
+  return '📶';
+}
+
+function vendorBadge(d) {
+  const v = d.vendor || '';
+  const t = d.device_type || '';
+  if(!v) return '';
+  const colors = {
+    'Apple':'#555','Samsung':'#1428a0','Huawei':'#cf0a2c','Xiaomi':'#ff6900',
+    'OPPO':'#1d8348','Intel':'#0071c5','Dell':'#007db8','Lenovo':'#e2231a',
+    'HP':'#0096d6','ZTE':'#e67e00','TP-Link':'#4ec24a','موبايل':'#7d3c98',
+  };
+  const color = colors[v] || '#555';
+  const typeAr = {'iphone':'iPhone','mac':'Mac','phone':'موبايل','laptop':'لابتوب',
+    'desktop':'كمبيوتر','tv':'تلفاز','router':'راوتر','unknown':''}[t]||'';
+  return `<span style="font-size:10px;background:${color};color:#fff;padding:1px 6px;border-radius:4px;margin-left:4px">${v}${typeAr?' · '+typeAr:''}</span>`;
 }
 
 // ── Render devices ─────────────────────────────────────────────────────────
@@ -338,8 +364,9 @@ function render() {
         <div class="dev-name-row">
           <button class="dev-edit" onclick="openRename('${d.mac}','${esc(d.hostname)}')" title="تغيير الاسم">✏️</button>
           <span class="dev-name">${esc(d.hostname)}</span>
+          ${vendorBadge(d)}
         </div>
-        <div class="dev-tags">${tags}<span class="tag mac">${d.mac}</span></div>
+        <div class="dev-tags">${tags}<span class="tag mac">${d.ip} · ${d.mac}</span></div>
       </div>
       <div class="dev-actions">
         <div class="online-dot ${d.online?'':'off'}"></div>
