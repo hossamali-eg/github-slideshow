@@ -5,531 +5,510 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>لوحة تحكم الراوتر</title>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-
   :root {
-    --bg:       #0d1117;
-    --card:     #161b22;
-    --border:   #21262d;
-    --blue:     #1f6feb;
-    --green:    #238636;
-    --red:      #da3633;
-    --yellow:   #d29922;
-    --text:     #e6edf3;
-    --muted:    #8b949e;
-    --radius:   12px;
+    --bg:#0d1117; --card:#161b22; --card2:#1c2128; --border:#21262d; --border2:#30363d;
+    --blue:#1f6feb; --blue-bg:#0d2137;
+    --green:#238636; --green-bg:#0d3321; --green-t:#3fb950;
+    --red:#da3633;   --red-bg:#3d0c0b;   --red-t:#ff7b72;
+    --yellow:#d29922; --yellow-bg:#2d1e00; --yellow-t:#f0b429;
+    --text:#e6edf3; --muted:#8b949e; --dim:#6e7681;
+    --r:10px;
   }
+  @media(prefers-color-scheme:light){:root{
+    --bg:#f6f8fa;--card:#fff;--card2:#f0f2f5;--border:#d0d7de;--border2:#b3bac5;
+    --blue-bg:#ddf4ff;--green-bg:#dcffe4;--green-t:#1a7f37;--red-bg:#ffd7d5;--red-t:#cf222e;
+    --yellow-bg:#fff8c5;--yellow-t:#9a6700;
+    --text:#1f2328;--muted:#636c76;--dim:#818c98;
+  }}
+  :root[data-theme=light]{--bg:#f6f8fa;--card:#fff;--card2:#f0f2f5;--border:#d0d7de;--border2:#b3bac5;--blue-bg:#ddf4ff;--green-bg:#dcffe4;--green-t:#1a7f37;--red-bg:#ffd7d5;--red-t:#cf222e;--yellow-bg:#fff8c5;--yellow-t:#9a6700;--text:#1f2328;--muted:#636c76;--dim:#818c98;}
+  :root[data-theme=dark]{--bg:#0d1117;--card:#161b22;--card2:#1c2128;--border:#21262d;--border2:#30363d;--blue-bg:#0d2137;--green-bg:#0d3321;--green-t:#3fb950;--red-bg:#3d0c0b;--red-t:#ff7b72;--yellow-bg:#2d1e00;--yellow-t:#f0b429;--text:#e6edf3;--muted:#8b949e;--dim:#6e7681;}
 
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
-    min-height: 100vh;
-  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:-apple-system,'Segoe UI',Tahoma,Arial,sans-serif;min-height:100vh;direction:rtl;font-size:14px}
 
-  /* ── Header ── */
-  header {
-    background: var(--card);
-    border-bottom: 1px solid var(--border);
-    padding: 16px 24px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    position: sticky; top: 0; z-index: 100;
-  }
-  .logo { font-size: 20px; font-weight: 700; color: var(--blue); }
-  .logo span { color: var(--text); font-size: 13px; margin-right: 10px; }
-  .router-badge {
-    background: #0d2137; color: var(--blue);
-    border: 1px solid var(--blue); border-radius: 20px;
-    padding: 4px 12px; font-size: 13px; direction: ltr;
-  }
-  #conn-dot {
-    display: inline-block; width: 8px; height: 8px;
-    border-radius: 50%; background: var(--muted);
-    margin-left: 6px; vertical-align: middle;
-    transition: background .4s;
-  }
-  #conn-dot.ok  { background: var(--green); box-shadow: 0 0 6px var(--green); }
-  #conn-dot.err { background: var(--red); }
+  /* Header */
+  header{background:var(--card);border-bottom:1px solid var(--border);padding:0 20px;height:54px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+  .logo{font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px}
+  .logo-mark{width:28px;height:28px;background:var(--blue);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:14px}
+  .hdr-right{display:flex;align-items:center;gap:8px}
+  .chip{display:flex;align-items:center;gap:5px;background:var(--card2);border:1px solid var(--border);border-radius:20px;padding:3px 11px;font-size:12px;color:var(--muted);direction:ltr}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex-shrink:0;transition:background .3s}
+  .dot.ok{background:var(--green);box-shadow:0 0 5px var(--green)}
+  .dot.err{background:var(--red)}
+  .ts{font-size:11px;color:var(--dim)}
+  .icon-btn{background:none;border:1px solid var(--border);border-radius:8px;color:var(--muted);padding:5px 10px;cursor:pointer;font-size:15px;transition:all .15s;line-height:1}
+  .icon-btn:hover{border-color:var(--blue);color:var(--blue)}
 
-  /* ── Main grid ── */
-  main { max-width: 1100px; margin: 0 auto; padding: 24px 16px; }
+  /* Main */
+  main{max-width:1040px;margin:0 auto;padding:20px 14px 48px;display:flex;flex-direction:column;gap:16px}
 
-  /* ── Stat cards ── */
-  .stats-row {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 16px; margin-bottom: 24px;
-  }
-  .stat-card {
-    background: var(--card); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 20px;
-    position: relative; overflow: hidden;
-    transition: border-color .3s;
-  }
-  .stat-card:hover { border-color: var(--blue); }
-  .stat-card .label { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
-  .stat-card .value { font-size: 28px; font-weight: 700; direction: ltr; text-align: right; }
-  .stat-card .unit  { font-size: 12px; color: var(--muted); direction: ltr; }
-  .stat-card .icon  {
-    position: absolute; top: 16px; left: 16px;
-    font-size: 24px; opacity: .4;
-  }
+  /* Internet card */
+  .inet-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:20px 22px;display:flex;align-items:center;justify-content:space-between;gap:14px;transition:border-color .3s}
+  .inet-card.on{border-color:var(--green)}
+  .inet-card.off{border-color:var(--red)}
+  .inet-left{display:flex;align-items:center;gap:16px}
+  .inet-ico{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;transition:background .3s}
+  .inet-ico.on{background:var(--green-bg)}
+  .inet-ico.off{background:var(--red-bg)}
+  .inet-text h2{font-size:16px;font-weight:700;margin-bottom:5px}
+  .inet-text p{font-size:12px;color:var(--muted)}
+  .pill{display:inline-flex;align-items:center;gap:4px;border-radius:20px;padding:2px 9px;font-size:12px;font-weight:600;margin-bottom:4px}
+  .pill.on{background:var(--green-bg);color:var(--green-t);border:1px solid var(--green)}
+  .pill.off{background:var(--red-bg);color:var(--red-t);border:1px solid var(--red)}
+  .pill-dot{width:5px;height:5px;border-radius:50%;background:currentColor}
+  .sw-wrap{display:flex;flex-direction:column;align-items:center;gap:5px}
+  .sw-cap{font-size:11px;color:var(--dim)}
+  .sw{position:relative;width:50px;height:27px;cursor:pointer}
+  .sw input{display:none}
+  .sw-tr{width:100%;height:100%;border-radius:27px;background:var(--red-bg);border:1px solid var(--red);transition:all .25s}
+  .sw input:checked~.sw-tr{background:var(--green-bg);border-color:var(--green)}
+  .sw-th{position:absolute;top:3px;right:3px;width:21px;height:21px;border-radius:50%;background:var(--red);transition:all .25s;box-shadow:0 1px 3px #0004}
+  .sw input:checked~.sw-th{right:calc(100% - 24px);background:var(--green)}
 
-  /* ── Internet toggle card ── */
-  .internet-card {
-    background: var(--card); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 24px;
-    display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: 24px;
-    transition: border-color .3s;
-  }
-  .internet-card.on  { border-color: var(--green); }
-  .internet-card.off { border-color: var(--red); }
-  .internet-info h2 { font-size: 18px; margin-bottom: 6px; }
-  .internet-info p  { font-size: 14px; color: var(--muted); }
-  .status-badge {
-    display: inline-block; border-radius: 20px;
-    padding: 3px 12px; font-size: 13px; font-weight: 600;
-    margin-top: 6px;
-  }
-  .status-badge.on  { background:#0d3321; color:#3fb950; border:1px solid #238636; }
-  .status-badge.off { background:#3d0c0b; color:#ff7b72; border:1px solid #da3633; }
+  /* Stats */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  @media(max-width:600px){.stats{grid-template-columns:1fr 1fr}}
+  .stat{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:14px}
+  .stat-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+  .stat-lbl{font-size:11px;color:var(--muted)}
+  .stat-ico{font-size:15px;opacity:.6}
+  .stat-val{font-size:24px;font-weight:700;direction:ltr;text-align:right;line-height:1;font-variant-numeric:tabular-nums}
+  .stat-unit{font-size:10px;color:var(--dim);direction:ltr;text-align:right}
 
-  /* Toggle switch */
-  .toggle-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; }
-  .toggle-label { font-size: 12px; color: var(--muted); }
-  .toggle {
-    position: relative; width: 64px; height: 34px;
-    cursor: pointer; user-select: none;
-  }
-  .toggle input { display: none; }
-  .toggle-track {
-    width: 100%; height: 100%; border-radius: 34px;
-    background: #3d0c0b; transition: background .3s;
-    border: 1px solid var(--red);
-  }
-  .toggle input:checked ~ .toggle-track {
-    background: #0d3321; border-color: var(--green);
-  }
-  .toggle-thumb {
-    position: absolute; top: 4px; right: 4px;
-    width: 26px; height: 26px; border-radius: 50%;
-    background: var(--red); transition: all .3s;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 14px;
-  }
-  .toggle input:checked ~ .toggle-thumb {
-    right: calc(100% - 30px); background: var(--green);
-  }
+  /* Section header */
+  .sec-row{display:flex;align-items:center;justify-content:space-between}
+  .sec-title{font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;display:flex;align-items:center;gap:8px}
+  .cnt-badge{background:var(--blue-bg);color:var(--blue);border:1px solid color-mix(in srgb,var(--blue) 30%,transparent);border-radius:20px;padding:1px 8px;font-size:11px;font-weight:600}
+  .ref-btn{background:none;border:1px solid var(--border);border-radius:8px;color:var(--muted);padding:4px 11px;font-size:12px;cursor:pointer;font-family:inherit;transition:all .15s;display:flex;align-items:center;gap:4px}
+  .ref-btn:hover{border-color:var(--blue);color:var(--blue)}
+  .spin-icon{display:inline-block}
+  .spinning .spin-icon{animation:spin .5s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
 
-  /* ── Section header ── */
-  .section-header {
-    display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: 16px;
-  }
-  .section-header h2 { font-size: 16px; font-weight: 600; }
-  .badge {
-    background: #1f6feb22; color: var(--blue);
-    border: 1px solid #1f6feb55;
-    border-radius: 20px; padding: 2px 10px; font-size: 12px;
-  }
-  .btn-refresh {
-    background: none; border: 1px solid var(--border);
-    color: var(--muted); border-radius: 8px;
-    padding: 6px 14px; font-size: 13px; cursor: pointer;
-    transition: all .2s; font-family: inherit;
-  }
-  .btn-refresh:hover { border-color: var(--blue); color: var(--blue); }
-  .btn-refresh.spinning { animation: spin .6s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
+  /* Device list */
+  .dev-list{display:flex;flex-direction:column;gap:8px}
+  .dev-row{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:12px 16px;display:grid;grid-template-columns:38px 1fr auto;align-items:center;gap:12px;transition:border-color .2s;animation:fadeIn .25s ease both}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  .dev-row:hover{border-color:var(--border2)}
+  .dev-row.blocked{border-color:color-mix(in srgb,var(--red) 35%,transparent);background:color-mix(in srgb,var(--red-bg) 35%,var(--card))}
+  .dev-row.limited{border-color:color-mix(in srgb,var(--yellow) 35%,transparent)}
+  .dev-row.scheduled{border-color:color-mix(in srgb,var(--blue) 35%,transparent)}
 
-  /* ── Device list ── */
-  .device-list { display: flex; flex-direction: column; gap: 10px; }
+  .dev-ava{width:38px;height:38px;border-radius:9px;background:var(--card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+  .dev-main{}
+  .dev-name-row{display:flex;align-items:center;gap:6px;direction:ltr;justify-content:flex-end}
+  .dev-name{font-size:14px;font-weight:600;direction:ltr}
+  .dev-edit{background:none;border:none;color:var(--dim);cursor:pointer;font-size:12px;padding:1px 3px;border-radius:4px;transition:color .15s;line-height:1}
+  .dev-edit:hover{color:var(--blue)}
+  .dev-tags{display:flex;gap:5px;justify-content:flex-end;margin-top:3px;flex-wrap:wrap}
+  .tag{font-size:10px;padding:1px 7px;border-radius:20px;font-weight:600;direction:ltr}
+  .tag.ip{background:var(--card2);color:var(--dim);border:1px solid var(--border);font-variant-numeric:tabular-nums}
+  .tag.mac{background:var(--card2);color:var(--dim);border:1px solid var(--border)}
+  .tag.speed{background:var(--yellow-bg);color:var(--yellow-t);border:1px solid var(--yellow)}
+  .tag.sched{background:var(--blue-bg);color:var(--blue);border:1px solid color-mix(in srgb,var(--blue) 40%,transparent)}
 
-  .device-card {
-    background: var(--card); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 14px 18px;
-    display: flex; align-items: center; justify-content: space-between;
-    gap: 12px; transition: border-color .2s;
-    animation: fadeIn .3s ease;
-  }
-  @keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
-  .device-card:hover { border-color: #30363d; }
-  .device-card.blocked { border-color: #da363355; background: #1a0808; }
+  .dev-actions{display:flex;align-items:center;gap:6px;flex-shrink:0}
+  .online-dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 4px var(--green);flex-shrink:0}
+  .online-dot.off{background:var(--dim);box-shadow:none}
 
-  .device-icon { font-size: 28px; flex-shrink: 0; }
-  .device-info { flex: 1; min-width: 0; }
-  .device-name {
-    font-size: 15px; font-weight: 600;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    direction: ltr; text-align: right;
-  }
-  .device-meta { font-size: 12px; color: var(--muted); direction: ltr; text-align: right; }
+  .btn{border:none;border-radius:6px;padding:5px 11px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;white-space:nowrap}
+  .btn-red{background:var(--red-bg);color:var(--red-t)} .btn-red:hover{background:var(--red);color:#fff}
+  .btn-green{background:var(--green-bg);color:var(--green-t)} .btn-green:hover{background:var(--green);color:#fff}
+  .btn-ghost{background:var(--card2);color:var(--muted);border:1px solid var(--border)} .btn-ghost:hover{border-color:var(--blue);color:var(--blue)}
+  .btn-blue{background:var(--blue);color:#fff} .btn-blue:hover{opacity:.85}
 
-  .device-dot {
-    width: 9px; height: 9px; border-radius: 50%;
-    background: var(--green); flex-shrink: 0;
-    box-shadow: 0 0 6px var(--green);
-  }
-  .device-dot.offline { background: var(--muted); box-shadow: none; }
+  /* Modals */
+  .overlay{display:none;position:fixed;inset:0;background:#000b;z-index:200;align-items:center;justify-content:center;padding:16px}
+  .overlay.open{display:flex}
+  .modal{background:var(--card);border:1px solid var(--border2);border-radius:14px;padding:24px;width:100%;max-width:400px;display:flex;flex-direction:column;gap:14px}
+  .modal h3{font-size:16px;font-weight:700}
+  .modal p{font-size:13px;color:var(--muted)}
+  .field label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px}
+  .field input[type=text],.field input[type=password],.field input[type=time]{width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:14px;font-family:inherit;direction:ltr;outline:none;transition:border-color .15s}
+  .field input:focus{border-color:var(--blue)}
+  .range-wrap{display:flex;align-items:center;gap:10px}
+  .range-wrap input[type=range]{flex:1;accent-color:var(--blue);height:5px}
+  .range-val{font-size:13px;font-weight:700;min-width:40px;text-align:left;direction:ltr;font-variant-numeric:tabular-nums}
+  .modal-btns{display:flex;gap:8px;margin-top:4px}
+  .toggle-row{display:flex;align-items:center;justify-content:space-between}
+  .toggle-row span{font-size:14px;font-weight:600}
 
-  .device-actions { display: flex; gap: 8px; flex-shrink: 0; }
-  .btn-block {
-    border-radius: 8px; padding: 6px 14px; font-size: 13px;
-    cursor: pointer; font-family: inherit; font-weight: 600;
-    border: none; transition: all .2s;
-  }
-  .btn-block.block   { background:#3d0c0b; color:#ff7b72; }
-  .btn-block.block:hover { background:#da3633; color:#fff; }
-  .btn-block.unblock { background:#0d3321; color:#3fb950; }
-  .btn-block.unblock:hover { background:#238636; color:#fff; }
+  /* Skeleton */
+  .skel{height:66px;border-radius:var(--r);background:linear-gradient(90deg,var(--card) 25%,var(--card2) 50%,var(--card) 75%);background-size:200% 100%;animation:shimmer 1.2s infinite}
+  @keyframes shimmer{to{background-position:-200% 0}}
 
-  /* ── Empty / Loading states ── */
-  .empty {
-    text-align: center; padding: 48px 16px;
-    color: var(--muted); font-size: 14px;
-  }
-  .empty .icon { font-size: 48px; margin-bottom: 12px; opacity: .4; }
+  /* Toast */
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--border2);border-radius:10px;padding:9px 18px;font-size:13px;box-shadow:0 4px 20px #0006;z-index:999;opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap}
+  .toast.show{opacity:1}
 
-  .skeleton {
-    background: linear-gradient(90deg, var(--card) 25%, #1f262e 50%, var(--card) 75%);
-    background-size: 200% 100%;
-    animation: shimmer 1.2s infinite;
-    border-radius: var(--radius); height: 70px;
-  }
-  @keyframes shimmer { to { background-position: -200% 0; } }
-
-  /* ── Footer ── */
-  footer {
-    text-align: center; padding: 24px;
-    color: var(--muted); font-size: 12px;
-    border-top: 1px solid var(--border); margin-top: 40px;
-  }
-  #last-update { color: var(--muted); font-size: 12px; }
-
-  /* ── Router login modal ── */
-  .modal-overlay {
-    display: none; position: fixed; inset: 0;
-    background: #000a; z-index: 200;
-    align-items: center; justify-content: center;
-  }
-  .modal-overlay.open { display: flex; }
-  .modal {
-    background: var(--card); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 28px;
-    width: 90%; max-width: 420px;
-  }
-  .modal h3 { margin-bottom: 16px; }
-  .modal input {
-    width: 100%; padding: 10px 14px; border-radius: 8px;
-    border: 1px solid var(--border); background: var(--bg);
-    color: var(--text); font-size: 14px; margin-bottom: 12px;
-    font-family: inherit; direction: ltr;
-  }
-  .modal-actions { display: flex; gap: 10px; margin-top: 4px; }
-  .btn-primary {
-    flex: 1; background: var(--blue); color: #fff;
-    border: none; border-radius: 8px; padding: 10px;
-    font-size: 14px; font-weight: 600; cursor: pointer;
-    font-family: inherit; transition: opacity .2s;
-  }
-  .btn-primary:hover { opacity: .85; }
-  .btn-secondary {
-    background: none; border: 1px solid var(--border);
-    color: var(--muted); border-radius: 8px; padding: 10px 16px;
-    font-size: 14px; cursor: pointer; font-family: inherit;
-  }
-
-  /* Responsive */
-  @media (max-width: 600px) {
-    .device-card { flex-wrap: wrap; }
-    .stats-row { grid-template-columns: 1fr 1fr; }
-  }
+  /* Footer */
+  footer{text-align:center;padding:20px;color:var(--dim);font-size:11px;border-top:1px solid var(--border);margin-top:20px}
 </style>
 </head>
 <body>
 
-<!-- ── Header ── -->
 <header>
-  <div class="logo">
-    📡 WiFi Manager
-    <span>لوحة تحكم الراوتر</span>
-  </div>
-  <div style="display:flex;align-items:center;gap:12px;">
-    <span id="last-update"></span>
-    <div class="router-badge">
-      <span id="conn-dot"></span>
-      {{ router_ip }}
-    </div>
-    <button class="btn-refresh" onclick="openLoginModal()" title="إعدادات الاتصال">⚙️</button>
+  <div class="logo"><div class="logo-mark">📡</div>WiFi Manager</div>
+  <div class="hdr-right">
+    <span class="ts" id="ts"></span>
+    <div class="chip"><div class="dot" id="dot"></div><span>{{ router_ip }}</span></div>
+    <button class="icon-btn" onclick="openModal('login-modal')" title="إعدادات">⚙️</button>
   </div>
 </header>
 
 <main>
 
-  <!-- ── Internet Toggle ── -->
-  <div class="internet-card" id="internet-card">
-    <div class="internet-info">
-      <h2>🌐 الإنترنت</h2>
-      <div id="internet-badge" class="status-badge on">مفعّل</div>
-      <p style="margin-top:6px;" id="internet-sub">يعمل بشكل طبيعي</p>
+  <!-- Internet -->
+  <div class="inet-card on" id="inet-card">
+    <div class="inet-left">
+      <div class="inet-ico on" id="inet-ico">🌐</div>
+      <div class="inet-text">
+        <div class="pill on" id="inet-pill"><div class="pill-dot"></div><span id="inet-lbl">مفعّل</span></div>
+        <h2>الإنترنت</h2>
+        <p id="inet-sub">يعمل بشكل طبيعي</p>
+      </div>
     </div>
-    <div class="toggle-wrap">
-      <span class="toggle-label">تشغيل / إيقاف</span>
-      <label class="toggle">
-        <input type="checkbox" id="internet-toggle" checked onchange="toggleInternet(this.checked)">
-        <div class="toggle-track"></div>
-        <div class="toggle-thumb">⚡</div>
-      </label>
-    </div>
-  </div>
-
-  <!-- ── Stats ── -->
-  <div class="stats-row">
-    <div class="stat-card">
-      <div class="icon">⬇️</div>
-      <div class="label">التحميل</div>
-      <div class="value" id="stat-down">0.0</div>
-      <div class="unit">Mbps</div>
-    </div>
-    <div class="stat-card">
-      <div class="icon">⬆️</div>
-      <div class="label">الرفع</div>
-      <div class="value" id="stat-up">0.0</div>
-      <div class="unit">Mbps</div>
-    </div>
-    <div class="stat-card">
-      <div class="icon">📱</div>
-      <div class="label">أجهزة متصلة</div>
-      <div class="value" id="stat-devices">—</div>
-      <div class="unit">جهاز</div>
-    </div>
-    <div class="stat-card">
-      <div class="icon">🚫</div>
-      <div class="label">أجهزة محجوبة</div>
-      <div class="value" id="stat-blocked">0</div>
-      <div class="unit">جهاز</div>
+    <div class="sw-wrap">
+      <span class="sw-cap">تشغيل / إيقاف</span>
+      <label class="sw"><input type="checkbox" id="inet-sw" checked onchange="toggleInternet(this.checked)"><div class="sw-tr"></div><div class="sw-th"></div></label>
     </div>
   </div>
 
-  <!-- ── Devices ── -->
-  <div class="section-header">
-    <h2>الأجهزة المتصلة <span class="badge" id="devices-badge">جاري الفحص...</span></h2>
-    <button class="btn-refresh" id="refresh-btn" onclick="loadDevices(true)">🔄 تحديث</button>
+  <!-- Stats -->
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-hdr"><span class="stat-lbl">التحميل</span><span class="stat-ico">⬇️</span></div>
+      <div class="stat-val" id="s-dl">0.0</div><div class="stat-unit">Mbps</div>
+    </div>
+    <div class="stat">
+      <div class="stat-hdr"><span class="stat-lbl">الرفع</span><span class="stat-ico">⬆️</span></div>
+      <div class="stat-val" id="s-ul">0.0</div><div class="stat-unit">Mbps</div>
+    </div>
+    <div class="stat">
+      <div class="stat-hdr"><span class="stat-lbl">أجهزة متصلة</span><span class="stat-ico">📱</span></div>
+      <div class="stat-val" id="s-dev">—</div><div class="stat-unit">جهاز</div>
+    </div>
+    <div class="stat">
+      <div class="stat-hdr"><span class="stat-lbl">أجهزة محجوبة</span><span class="stat-ico">🚫</span></div>
+      <div class="stat-val" id="s-blk">0</div><div class="stat-unit">جهاز</div>
+    </div>
   </div>
 
-  <div class="device-list" id="device-list">
-    <div class="skeleton"></div>
-    <div class="skeleton"></div>
-    <div class="skeleton"></div>
+  <!-- Devices -->
+  <div class="sec-row">
+    <span class="sec-title">الأجهزة المتصلة <span class="cnt-badge" id="dev-cnt">…</span></span>
+    <button class="ref-btn" id="ref-btn" onclick="loadDevices(true)"><span class="spin-icon">↻</span> تحديث</button>
+  </div>
+
+  <div class="dev-list" id="dev-list">
+    <div class="skel"></div><div class="skel"></div><div class="skel"></div>
   </div>
 
 </main>
 
-<footer>
-  WiFi Manager Dashboard — ZTE ZXHN H188A &nbsp;|&nbsp; يتحدث كل 15 ثانية
-</footer>
+<footer>WiFi Manager Dashboard — ZTE ZXHN H188A &nbsp;|&nbsp; يتحدث كل 15 ثانية</footer>
 
-<!-- ── Router Login Modal ── -->
-<div class="modal-overlay" id="login-modal">
+<!-- ═══════════════════ MODALS ═══════════════════ -->
+
+<!-- Rename -->
+<div class="overlay" id="rename-modal">
   <div class="modal">
-    <h3>⚙️ إعدادات الراوتر</h3>
-    <input type="text"     id="m-ip"   placeholder="IP الراوتر (مثال: 192.168.1.1)" value="{{ router_ip }}">
-    <input type="text"     id="m-user" placeholder="اسم المستخدم" value="admin">
-    <input type="password" id="m-pass" placeholder="كلمة المرور">
-    <div class="modal-actions">
-      <button class="btn-primary" onclick="doRouterLogin()">🔗 اتصال</button>
-      <button class="btn-secondary" onclick="closeLoginModal()">إلغاء</button>
+    <h3>✏️ تغيير اسم الجهاز</h3>
+    <div class="field"><label>الاسم الجديد</label><input type="text" id="m-name" placeholder="مثال: موبايل حسام"></div>
+    <input type="hidden" id="m-mac-rename">
+    <div class="modal-btns">
+      <button class="btn btn-blue" style="flex:1" onclick="doRename()">حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal('rename-modal')">إلغاء</button>
     </div>
   </div>
 </div>
 
-<script>
-// ── State ────────────────────────────────────────────────────────────────────
-let internetOn  = true;
-let blockedMacs = new Set();
-let allDevices  = [];
+<!-- Speed limit -->
+<div class="overlay" id="speed-modal">
+  <div class="modal">
+    <h3>⚡ تحديد سرعة الجهاز</h3>
+    <p>0 = بدون حد</p>
+    <input type="hidden" id="m-mac-speed">
+    <div class="field">
+      <label>سرعة التحميل القصوى</label>
+      <div class="range-wrap">
+        <input type="range" id="r-dl" min="0" max="100" value="0" oninput="document.getElementById('v-dl').textContent=this.value">
+        <span class="range-val"><span id="v-dl">0</span> Mbps</span>
+      </div>
+    </div>
+    <div class="field">
+      <label>سرعة الرفع القصوى</label>
+      <div class="range-wrap">
+        <input type="range" id="r-ul" min="0" max="50" value="0" oninput="document.getElementById('v-ul').textContent=this.value">
+        <span class="range-val"><span id="v-ul">0</span> Mbps</span>
+      </div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn btn-blue" style="flex:1" onclick="doSpeedLimit()">تطبيق</button>
+      <button class="btn btn-ghost" onclick="closeModal('speed-modal')">إلغاء</button>
+    </div>
+  </div>
+</div>
 
-// ── Icons by hostname/IP ──────────────────────────────────────────────────────
-function deviceIcon(d) {
-  const n = (d.hostname || '').toLowerCase();
-  if (n.includes('iphone') || n.includes('ipad'))  return '🍎';
-  if (n.includes('android') || n.includes('samsung') || n.includes('huawei')) return '📱';
-  if (n.includes('mac') || n.includes('macbook'))  return '💻';
-  if (n.includes('pc') || n.includes('desktop') || n.includes('windows')) return '🖥️';
-  if (n.includes('tv') || n.includes('smart'))     return '📺';
-  if (n.includes('xbox') || n.includes('ps'))      return '🎮';
-  if (n.includes('camera') || n.includes('cam'))   return '📷';
-  if (n.includes('printer'))                        return '🖨️';
+<!-- Schedule -->
+<div class="overlay" id="sched-modal">
+  <div class="modal">
+    <h3>🕐 جدولة الحجب</h3>
+    <p>حجب الجهاز تلقائياً في الأوقات المحددة</p>
+    <input type="hidden" id="m-mac-sched">
+    <div class="toggle-row">
+      <span>تفعيل الجدولة</span>
+      <label class="sw"><input type="checkbox" id="sched-enabled" checked><div class="sw-tr"></div><div class="sw-th"></div></label>
+    </div>
+    <div class="field"><label>وقت الحجب من</label><input type="time" id="sched-from" value="22:00"></div>
+    <div class="field"><label>وقت الفتح إلى</label><input type="time" id="sched-to"   value="07:00"></div>
+    <p style="font-size:11px;color:var(--blue)">مثال: حجب من 10 مساءً حتى 7 صباحاً يومياً</p>
+    <div class="modal-btns">
+      <button class="btn btn-blue" style="flex:1" onclick="doSchedule()">حفظ</button>
+      <button class="btn btn-ghost" onclick="closeModal('sched-modal')">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<!-- Router Login -->
+<div class="overlay" id="login-modal">
+  <div class="modal">
+    <h3>⚙️ إعدادات الراوتر</h3>
+    <div class="field"><label>IP الراوتر</label><input type="text" id="m-ip" value="{{ router_ip }}"></div>
+    <div class="field"><label>اسم المستخدم</label><input type="text" id="m-user" value="admin"></div>
+    <div class="field"><label>كلمة المرور</label><input type="password" id="m-pass"></div>
+    <div class="modal-btns">
+      <button class="btn btn-blue" style="flex:1" onclick="doLogin()">🔗 اتصال</button>
+      <button class="btn btn-ghost" onclick="closeModal('login-modal')">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────────────────
+let devices = [];
+
+// ── Icons ────────────────────────────────────────────────────────────────────
+function icon(d) {
+  const n = (d.hostname||'').toLowerCase();
+  if(n.includes('iphone')||n.includes('ipad')||n.includes('apple')) return '🍎';
+  if(n.includes('android')||n.includes('samsung')||n.includes('huawei')||n.includes('oppo')||n.includes('reno')) return '📱';
+  if(n.includes('mac')||n.includes('macbook')) return '💻';
+  if(n.includes('windows')||n.includes('desktop')||n.includes('pc')) return '🖥️';
+  if(n.includes('tv')||n.includes('smart')||n.includes('vision')) return '📺';
+  if(n.includes('xbox')||n.includes('ps')||n.includes('play')) return '🎮';
+  if(n.includes('camera')||n.includes('cam')) return '📷';
+  if(n.includes('printer')) return '🖨️';
+  if(n.includes('router')||n.includes('gateway')) return '🔧';
   return '📡';
 }
 
-// ── Load Devices ─────────────────────────────────────────────────────────────
-async function loadDevices(manual = false) {
-  const btn = document.getElementById('refresh-btn');
-  if (manual) btn.textContent = '🔄 جاري...';
+// ── Render devices ─────────────────────────────────────────────────────────
+function render() {
+  const list = document.getElementById('dev-list');
+  const blocked = devices.filter(d=>d.blocked).length;
 
-  try {
-    const res  = await fetch('/api/devices');
-    allDevices = await res.json();
-    renderDevices();
-  } catch (e) {
-    document.getElementById('device-list').innerHTML =
-      '<div class="empty"><div class="icon">⚠️</div>تعذر الاتصال بالخادم</div>';
-  }
+  document.getElementById('dev-cnt').textContent  = devices.length + ' جهاز';
+  document.getElementById('s-dev').textContent    = devices.length;
+  document.getElementById('s-blk').textContent    = blocked;
 
-  if (manual) {
-    setTimeout(() => btn.textContent = '🔄 تحديث', 800);
-  }
-  document.getElementById('last-update').textContent =
-    'آخر تحديث: ' + new Date().toLocaleTimeString('ar-EG');
-}
-
-function renderDevices() {
-  const list = document.getElementById('device-list');
-  if (!allDevices.length) {
-    list.innerHTML = '<div class="empty"><div class="icon">📡</div>لا توجد أجهزة — تأكد من اتصالك بنفس الشبكة</div>';
-    document.getElementById('devices-badge').textContent = '0 جهاز';
-    document.getElementById('stat-devices').textContent = '0';
+  if (!devices.length) {
+    list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--dim)">📡 لا توجد أجهزة — تأكد من اتصالك بالشبكة</div>';
     return;
   }
 
-  const blocked = allDevices.filter(d => d.blocked || blockedMacs.has(d.mac));
-  document.getElementById('devices-badge').textContent  = allDevices.length + ' جهاز';
-  document.getElementById('stat-devices').textContent   = allDevices.length;
-  document.getElementById('stat-blocked').textContent   = blocked.length;
+  list.innerHTML = devices.map((d,i) => {
+    const sl = d.speed_limit || {download:0,upload:0};
+    const sc = d.schedule    || {enabled:false};
+    const hasLimit = sl.download > 0 || sl.upload > 0;
+    const hasSched = sc.enabled;
+    const cls = [d.blocked?'blocked':'', hasLimit&&!d.blocked?'limited':'', hasSched&&!d.blocked?'scheduled':''].filter(Boolean).join(' ');
+    const tags = [
+      `<span class="tag ip">${d.ip}</span>`,
+      hasLimit ? `<span class="tag speed">⚡ ⬇${sl.download} ⬆${sl.upload} Mbps</span>` : '',
+      hasSched ? `<span class="tag sched">🕐 ${sc.from}–${sc.to}</span>` : '',
+    ].join('');
 
-  list.innerHTML = allDevices.map(d => {
-    const isBlocked = d.blocked || blockedMacs.has(d.mac);
-    const name = d.hostname !== d.ip ? d.hostname : `جهاز (${d.ip})`;
     return `
-    <div class="device-card ${isBlocked ? 'blocked' : ''}">
-      <div class="device-icon">${deviceIcon(d)}</div>
-      <div class="device-info">
-        <div class="device-name">${escHtml(name)}</div>
-        <div class="device-meta">${d.ip} &nbsp;|&nbsp; ${d.mac}</div>
+    <div class="dev-row ${cls}" style="animation-delay:${i*25}ms">
+      <div class="dev-ava">${icon(d)}</div>
+      <div class="dev-main">
+        <div class="dev-name-row">
+          <button class="dev-edit" onclick="openRename('${d.mac}','${esc(d.hostname)}')" title="تغيير الاسم">✏️</button>
+          <span class="dev-name">${esc(d.hostname)}</span>
+        </div>
+        <div class="dev-tags">${tags}<span class="tag mac">${d.mac}</span></div>
       </div>
-      <div class="device-dot ${d.online ? '' : 'offline'}"></div>
-      <div class="device-actions">
-        <button class="btn-block ${isBlocked ? 'unblock' : 'block'}"
-          onclick="blockDevice('${d.mac}', ${!isBlocked})">
-          ${isBlocked ? '✅ فتح' : '🚫 حجب'}
+      <div class="dev-actions">
+        <div class="online-dot ${d.online?'':'off'}"></div>
+        <button class="btn btn-ghost" onclick="openSpeed('${d.mac}',${sl.download},${sl.upload})" title="تحديد السرعة">⚡</button>
+        <button class="btn btn-ghost" onclick="openSched('${d.mac}','${sc.from||'22:00'}','${sc.to||'07:00'}',${sc.enabled?'true':'false'})" title="جدولة">🕐</button>
+        <button class="btn ${d.blocked?'btn-green':'btn-red'}" onclick="toggleBlock('${d.mac}',${!d.blocked})">
+          ${d.blocked?'✅ فتح':'🚫 حجب'}
         </button>
       </div>
     </div>`;
   }).join('');
 }
 
-// ── Block Device ──────────────────────────────────────────────────────────────
-async function blockDevice(mac, block) {
-  const btn = event.target;
-  btn.disabled = true; btn.textContent = '...';
-
+// ── Load devices ──────────────────────────────────────────────────────────────
+async function loadDevices(manual=false) {
+  const btn = document.getElementById('ref-btn');
+  if(manual) btn.classList.add('spinning');
   try {
-    const res  = await fetch('/api/block', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ mac, block })
-    });
-    const data = await res.json();
-    if (data.success) {
-      if (block) blockedMacs.add(mac); else blockedMacs.delete(mac);
-      // Update the specific device in allDevices
-      allDevices = allDevices.map(d => d.mac === mac ? {...d, blocked: block} : d);
-      renderDevices();
-    }
-  } catch (e) {
-    btn.disabled = false;
-    btn.textContent = block ? '🚫 حجب' : '✅ فتح';
-  }
+    const r = await fetch('/api/devices');
+    devices  = await r.json();
+    render();
+    document.getElementById('ts').textContent = 'آخر تحديث: ' + new Date().toLocaleTimeString('ar-EG');
+  } catch(e) {}
+  if(manual) setTimeout(()=>btn.classList.remove('spinning'), 700);
 }
 
-// ── Internet Toggle ───────────────────────────────────────────────────────────
-async function toggleInternet(enabled) {
-  const card   = document.getElementById('internet-card');
-  const badge  = document.getElementById('internet-badge');
-  const sub    = document.getElementById('internet-sub');
-
-  badge.className = 'status-badge ' + (enabled ? 'on' : 'off');
-  badge.textContent = enabled ? 'مفعّل' : 'موقف';
-  card.className = 'internet-card ' + (enabled ? 'on' : 'off');
-  sub.textContent = enabled ? 'يعمل بشكل طبيعي' : 'الإنترنت متوقف';
-
-  try {
-    await fetch('/api/internet', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ enabled })
-    });
-  } catch (e) {}
-}
-
-// ── Status Polling ────────────────────────────────────────────────────────────
+// ── Status ────────────────────────────────────────────────────────────────────
 async function loadStatus() {
   try {
-    const res  = await fetch('/api/status');
-    const data = await res.json();
-
-    // Connection dot
-    const dot = document.getElementById('conn-dot');
-    dot.className = data.router_connected ? 'ok' : 'err';
-
-    // Speed stats
-    document.getElementById('stat-down').textContent =
-      data.download !== undefined ? data.download.toFixed(1) : '—';
-    document.getElementById('stat-up').textContent =
-      data.upload !== undefined ? data.upload.toFixed(1) : '—';
-
-    // Sync internet state if changed externally
-    if (data.internet !== undefined && data.internet !== internetOn) {
-      internetOn = data.internet;
-      document.getElementById('internet-toggle').checked = internetOn;
-      toggleInternet(internetOn);
-    }
-  } catch (e) {
-    document.getElementById('conn-dot').className = 'err';
+    const r  = await fetch('/api/status');
+    const d  = await r.json();
+    document.getElementById('dot').className = 'dot ' + (d.router_connected?'ok':'err');
+    document.getElementById('s-dl').textContent = (d.download||0).toFixed(1);
+    document.getElementById('s-ul').textContent = (d.upload||0).toFixed(1);
+    if (d.internet !== undefined) syncInternet(d.internet);
+  } catch(e) {
+    document.getElementById('dot').className = 'dot err';
   }
 }
 
-// ── Router Login Modal ────────────────────────────────────────────────────────
-function openLoginModal()  { document.getElementById('login-modal').classList.add('open'); }
-function closeLoginModal() { document.getElementById('login-modal').classList.remove('open'); }
+// ── Internet toggle ───────────────────────────────────────────────────────────
+let inetState = true;
+function syncInternet(on) {
+  inetState = on;
+  document.getElementById('inet-sw').checked = on;
+  document.getElementById('inet-card').className = 'inet-card '+(on?'on':'off');
+  document.getElementById('inet-ico').className  = 'inet-ico '+(on?'on':'off');
+  document.getElementById('inet-pill').className = 'pill '+(on?'on':'off');
+  document.getElementById('inet-lbl').textContent = on?'مفعّل':'موقف';
+  document.getElementById('inet-sub').textContent = on?'يعمل بشكل طبيعي':'الإنترنت متوقف';
+}
+async function toggleInternet(on) {
+  syncInternet(on);
+  try { await fetch('/api/internet',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:on})}); } catch(e){}
+  showToast(on?'✅ تم تشغيل الإنترنت':'🔴 تم إيقاف الإنترنت');
+}
 
-async function doRouterLogin() {
+// ── Block ─────────────────────────────────────────────────────────────────────
+async function toggleBlock(mac, block) {
+  try {
+    const r = await fetch('/api/block',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mac,block})});
+    const d = await r.json();
+    if(d.success) {
+      devices = devices.map(x=>x.mac===mac?{...x,blocked:block}:x);
+      render();
+      const name = devices.find(x=>x.mac===mac)?.hostname||mac;
+      showToast(block?`🚫 تم حجب ${name}`:`✅ تم فتح ${name}`);
+    }
+  } catch(e){}
+}
+
+// ── Rename ────────────────────────────────────────────────────────────────────
+function openRename(mac, name) {
+  document.getElementById('m-mac-rename').value = mac;
+  document.getElementById('m-name').value = name === mac ? '' : name;
+  openModal('rename-modal');
+  setTimeout(()=>document.getElementById('m-name').focus(),100);
+}
+async function doRename() {
+  const mac  = document.getElementById('m-mac-rename').value;
+  const name = document.getElementById('m-name').value.trim();
+  if (!name) return;
+  try {
+    await fetch('/api/rename',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mac,name})});
+    devices = devices.map(x=>x.mac===mac?{...x,hostname:name}:x);
+    render(); closeModal('rename-modal');
+    showToast('✅ تم حفظ الاسم: ' + name);
+  } catch(e){}
+}
+
+// ── Speed limit ───────────────────────────────────────────────────────────────
+function openSpeed(mac, dl, ul) {
+  document.getElementById('m-mac-speed').value = mac;
+  document.getElementById('r-dl').value  = dl;
+  document.getElementById('r-ul').value  = ul;
+  document.getElementById('v-dl').textContent = dl;
+  document.getElementById('v-ul').textContent = ul;
+  openModal('speed-modal');
+}
+async function doSpeedLimit() {
+  const mac = document.getElementById('m-mac-speed').value;
+  const dl  = +document.getElementById('r-dl').value;
+  const ul  = +document.getElementById('r-ul').value;
+  try {
+    await fetch('/api/speed_limit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mac,download:dl,upload:ul})});
+    devices = devices.map(x=>x.mac===mac?{...x,speed_limit:{download:dl,upload:ul}}:x);
+    render(); closeModal('speed-modal');
+    showToast(dl||ul ? `⚡ تم ضبط السرعة: ⬇${dl} ⬆${ul} Mbps` : '⚡ تم إزالة حد السرعة');
+  } catch(e){}
+}
+
+// ── Schedule ──────────────────────────────────────────────────────────────────
+function openSched(mac, from, to, enabled) {
+  document.getElementById('m-mac-sched').value = mac;
+  document.getElementById('sched-from').value  = from;
+  document.getElementById('sched-to').value    = to;
+  document.getElementById('sched-enabled').checked = enabled;
+  openModal('sched-modal');
+}
+async function doSchedule() {
+  const mac     = document.getElementById('m-mac-sched').value;
+  const from    = document.getElementById('sched-from').value;
+  const to      = document.getElementById('sched-to').value;
+  const enabled = document.getElementById('sched-enabled').checked;
+  try {
+    await fetch('/api/schedule',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mac,from,to,enabled})});
+    devices = devices.map(x=>x.mac===mac?{...x,schedule:{enabled,from,to}}:x);
+    render(); closeModal('sched-modal');
+    showToast(enabled ? `🕐 جدولة مفعّلة: ${from} → ${to}` : '🕐 تم إلغاء الجدولة');
+  } catch(e){}
+}
+
+// ── Router login ──────────────────────────────────────────────────────────────
+async function doLogin() {
   const ip   = document.getElementById('m-ip').value.trim();
   const user = document.getElementById('m-user').value.trim();
   const pass = document.getElementById('m-pass').value;
-
   try {
-    const res  = await fetch('/api/router_login', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ ip, username: user, password: pass })
-    });
-    const data = await res.json();
-    closeLoginModal();
+    const r = await fetch('/api/router_login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ip,username:user,password:pass})});
+    const d = await r.json();
+    closeModal('login-modal');
+    showToast(d.success?'✅ تم الاتصال بالراوتر':'⚠️ فشل الاتصال — الأجهزة تعمل بـ ARP');
     loadStatus();
-    alert(data.success ? '✅ تم الاتصال بالراوتر!' : '⚠️ فشل الاتصال، الأجهزة ستُحدَّث من ARP');
-  } catch (e) {
-    alert('خطأ في الاتصال');
-  }
+  } catch(e){}
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-function escHtml(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+// ── Modal helpers ─────────────────────────────────────────────────────────────
+function openModal(id)  { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.overlay').forEach(el => {
+  el.addEventListener('click', e => { if(e.target===el) el.classList.remove('open'); });
+});
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+let _tt;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(_tt); _tt = setTimeout(()=>t.classList.remove('show'), 2500);
 }
 
-// ── Init ─────────────────────────────────────────────────────────────────────
-(function init() {
-  loadDevices();
-  loadStatus();
-  // Refresh devices every 15 s, status every 10 s
-  setInterval(loadDevices, 15_000);
-  setInterval(loadStatus,  10_000);
-})();
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+loadDevices();
+loadStatus();
+setInterval(loadDevices, 15000);
+setInterval(loadStatus,  10000);
 </script>
 </body>
 </html>
