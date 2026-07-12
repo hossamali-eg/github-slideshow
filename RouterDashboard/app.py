@@ -18,7 +18,8 @@ ROUTER_PASS = os.getenv("ROUTER_PASS", "")
 zte = ZTEClient(ROUTER_IP, ROUTER_USER, ROUTER_PASS)
 
 # ── Persistent device DB (names, speed limits, schedules) ─────────────────────
-DB_FILE = os.path.join(os.path.dirname(__file__), "devices_db.json")
+DB_FILE     = os.path.join(os.path.dirname(__file__), "devices_db.json")
+CONFIG_FILE = os.path.join(os.path.dirname(__file__), "router_config.json")
 
 def _load_db() -> dict:
     try:
@@ -30,6 +31,17 @@ def _load_db() -> dict:
 def _save_db(db: dict):
     with open(DB_FILE, "w") as f:
         json.dump(db, f, ensure_ascii=False, indent=2)
+
+def _load_config() -> dict:
+    try:
+        with open(CONFIG_FILE) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def _save_config(cfg: dict):
+    with open(CONFIG_FILE, "w") as f:
+        json.dump(cfg, f, ensure_ascii=False, indent=2)
 
 # ── In-memory state ───────────────────────────────────────────────────────────
 _blocked: set      = set()
@@ -268,15 +280,26 @@ def api_schedule():
     return jsonify({"success": True})
 
 
+@app.route("/api/config")
+def api_config():
+    cfg = _load_config()
+    return jsonify({
+        "ip":       cfg.get("ip",       ROUTER_IP),
+        "username": cfg.get("username", ROUTER_USER),
+        "has_saved": bool(cfg.get("password")),
+    })
+
+
 @app.route("/api/router_login", methods=["POST"])
 def api_router_login():
     data = request.json or {}
-    zte.configure(
-        data.get("ip",       ROUTER_IP),
-        data.get("username", ROUTER_USER),
-        data.get("password", ROUTER_PASS),
-    )
+    ip   = data.get("ip",       ROUTER_IP)
+    user = data.get("username", ROUTER_USER)
+    pw   = data.get("password", ROUTER_PASS)
+    zte.configure(ip, user, pw)
     ok = zte.login()
+    if ok:
+        _save_config({"ip": ip, "username": user, "password": pw})
     return jsonify({"success": ok})
 
 
@@ -290,6 +313,16 @@ if __name__ == "__main__":
 ║  افتح المتصفح:  http://localhost:8080 ║
 ╚══════════════════════════════════════╝
 """)
+    # Try auto-login: environment vars → saved config
+    cfg = _load_config()
+    _ip   = ROUTER_IP   or cfg.get("ip",       "192.168.1.1")
+    _user = ROUTER_USER or cfg.get("username",  "admin")
+    _pw   = ROUTER_PASS or cfg.get("password",  "")
+    if _pw:
+        zte.configure(_ip, _user, _pw)
+        print(f"جاري الاتصال بالراوتر {_ip} ...")
+        threading.Thread(target=zte.login, daemon=True).start()
+
     _devices_cache.extend(_arp_scan())
     t = threading.Thread(target=_refresh_loop, daemon=True)
     t.start()

@@ -1,1 +1,4 @@
 __pycache__/
+router_config.json
+devices_db.json
+*.pyc

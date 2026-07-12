@@ -473,17 +473,39 @@ async function doSchedule() {
 }
 
 // ── Router login ──────────────────────────────────────────────────────────────
+async function loadSavedConfig() {
+  try {
+    const r = await fetch('/api/config');
+    const c = await r.json();
+    document.getElementById('m-ip').value   = c.ip   || '192.168.1.1';
+    document.getElementById('m-user').value = c.username || 'admin';
+    if (c.has_saved) {
+      document.getElementById('m-pass').placeholder = '●●●●●●●● (محفوظة)';
+    }
+  } catch(e) {}
+}
+
 async function doLogin() {
   const ip   = document.getElementById('m-ip').value.trim();
   const user = document.getElementById('m-user').value.trim();
   const pass = document.getElementById('m-pass').value;
+  const btn  = document.querySelector('#login-modal .btn-blue');
+  btn.textContent = '⏳ جاري الاتصال...';
+  btn.disabled = true;
   try {
     const r = await fetch('/api/router_login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ip,username:user,password:pass})});
     const d = await r.json();
     closeModal('login-modal');
-    showToast(d.success?'✅ تم الاتصال بالراوتر':'⚠️ فشل الاتصال — الأجهزة تعمل بـ ARP');
+    if (d.success) {
+      showToast('✅ تم الاتصال بالراوتر وحُفظت الإعدادات');
+    } else {
+      showToast('ℹ️ الأجهزة تعمل بـ ARP — حاول كلمة مرور الراوتر لا الـ WiFi');
+    }
     loadStatus();
-  } catch(e){}
+  } catch(e){} finally {
+    btn.textContent = '🔗 اتصال';
+    btn.disabled = false;
+  }
 }
 
 // ── Modal helpers ─────────────────────────────────────────────────────────────
@@ -505,6 +527,7 @@ function showToast(msg) {
 function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
+loadSavedConfig();
 loadDevices();
 loadStatus();
 setInterval(loadDevices, 15000);
