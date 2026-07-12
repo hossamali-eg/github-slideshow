@@ -162,7 +162,7 @@ if __name__ == "__main__":
 ║      WiFi Manager Dashboard          ║
 ║      لوحة تحكم الراوتر              ║
 ╠══════════════════════════════════════╣
-║  افتح المتصفح:  http://localhost:5000 ║
+║  افتح المتصفح:  http://localhost:8080 ║
 ╚══════════════════════════════════════╝
 """)
     # Start background refresh
@@ -171,4 +171,4 @@ if __name__ == "__main__":
     # Initial scan
     _devices_cache.extend(_arp_scan())
 
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    app.run(host="0.0.0.0", port=8080, debug=False)

@@ -25,7 +25,7 @@ echo "✅ جاهز! سيفتح المتصفح تلقائياً..."
 echo ""
 
 # Open browser after 2 seconds
-(sleep 2 && open http://localhost:5000) &
+(sleep 2 && open http://localhost:8080) &
 
 # Pass router config if provided
 export ROUTER_IP="${ROUTER_IP:-192.168.1.1}"
