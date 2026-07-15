@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">WiFi Manager</string>
+    <string name="internet_enabled">الإنترنت مفعّل</string>
+    <string name="internet_disabled">الإنترنت موقف</string>
+    <string name="connected">متصل</string>
+    <string name="disconnected">غير متصل</string>
+    <string name="blocked">محجوب</string>
+    <string name="block">حجب</string>
+    <string name="unblock">إلغاء الحجب</string>
+    <string name="speed_limit">تحديد السرعة</string>
+    <string name="schedule">جدولة</string>
+    <string name="devices">الأجهزة</string>
+    <string name="home">الرئيسية</string>
+    <string name="settings">الإعدادات</string>
+    <string name="loading">جاري التحميل…</string>
+    <string name="retry">إعادة المحاولة</string>
+    <string name="cancel">إلغاء</string>
+    <string name="save">حفظ</string>
+    <string name="confirm">تأكيد</string>
+
+    <!-- Router types (order must match RouterType enum) -->
+    <string-array name="router_types">
+        <item>عام (Generic)</item>
+        <item>ZTE ZXHN H188A ★</item>
+        <item>TP-Link</item>
+        <item>D-Link</item>
+        <item>Huawei</item>
+        <item>ASUS</item>
+        <item>Netgear</item>
+        <item>MikroTik</item>
+        <item>OpenWRT</item>
+    </string-array>
+
+    <!-- Days -->
+    <string-array name="days_of_week">
+        <item>الأحد</item>
+        <item>الاثنين</item>
+        <item>الثلاثاء</item>
+        <item>الأربعاء</item>
+        <item>الخميس</item>
+        <item>الجمعة</item>
+        <item>السبت</item>
+    </string-array>
+</resources>

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/nav_graph"
+    app:startDestination="@id/homeFragment">
+
+    <fragment
+        android:id="@+id/homeFragment"
+        android:name="com.wifimanager.ui.dashboard.HomeFragment"
+        android:label="الرئيسية" />
+
+    <fragment
+        android:id="@+id/devicesFragment"
+        android:name="com.wifimanager.ui.devices.DevicesFragment"
+        android:label="الأجهزة" />
+
+    <fragment
+        android:id="@+id/scheduleFragment"
+        android:name="com.wifimanager.ui.scheduler.SchedulerFragment"
+        android:label="الجدولة" />
+
+    <fragment
+        android:id="@+id/settingsFragment"
+        android:name="com.wifimanager.ui.settings.SettingsFragment"
+        android:label="الإعدادات" />
+
+</navigation>
