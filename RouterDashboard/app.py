@@ -434,12 +434,15 @@ def _check_schedules():
 def _refresh_loop():
     subnet = ".".join(ROUTER_IP.split(".")[:3])
     while True:
-        _ping_sweep(subnet)
-        time.sleep(3)
-        with _cache_lock:
-            global _devices_cache
-            _devices_cache = _arp_scan()
-        _check_schedules()
+        try:
+            _ping_sweep(subnet)
+            time.sleep(3)
+            with _cache_lock:
+                global _devices_cache
+                _devices_cache = _arp_scan()
+            _check_schedules()
+        except Exception as e:
+            print(f"[refresh_loop] error: {e}")
         time.sleep(57)
 
 # ── Flask routes ──────────────────────────────────────────────────────────────

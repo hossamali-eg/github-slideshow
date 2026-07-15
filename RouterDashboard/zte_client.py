@@ -1,6 +1,30 @@
-"""ZTE ZXHN H188A HTTP client — comprehensive auth for WE Egypt routers."""
+"""
+ZTE ZXHN H188A HTTP client.
 
-import base64, hashlib, re, urllib3
+Implements the real ZTE "Lua CGI" web-management protocol used by most
+consumer ZTE gateways (H188A/H288A/F660/F680/...), reverse-engineered by
+the open-source project https://github.com/juacas/zte_tracker.
+
+Login sequence:
+  1. GET  /?_type=loginData&_tag=login_token&_=<ms>   -> numeric token
+  2. GET  /?_type=loginData&_tag=login_entry          -> sess_token + cookie
+  3. POST /?_type=loginData&_tag=login_entry
+         action=login&Username=..&Password=sha256(pwd+token)&_sessionTOKEN=..
+
+Devices are read from menuData endpoints returning XML <Instance> blocks
+(LAN: accessdev_landevs_lua.lua, WLAN: wlan_client_stat_lua.lua).
+
+The exact Lua script names differ slightly across ZTE firmware builds, so
+several known variants are tried in turn. Internet on/off and per-device
+block/speed-limit are NOT part of the documented protocol above (that
+project only reads data) — those remain best-effort guesses that may not
+work on every firmware; ARP-based device listing + manual rename always
+work regardless.
+"""
+
+import hashlib, re, time, urllib3
+import xml.etree.ElementTree as ET
+
 urllib3.disable_warnings()
 
 try:
@@ -13,11 +37,10 @@ except ImportError:
 def _sha256(s: str) -> str:
     return hashlib.sha256(s.encode()).hexdigest()
 
-def _md5(s: str) -> str:
-    return hashlib.md5(s.encode()).hexdigest()
 
-def _b64(s: str) -> str:
-    return base64.b64encode(s.encode()).decode()
+# Lua script name variants seen across ZTE firmware builds
+_LAN_SCRIPTS  = ["accessdev_landevs_lua.lua", "lan_client_stat_lua.lua"]
+_WLAN_SCRIPTS = ["wlan_client_stat_lua.lua", "accessdev_ssiddev_lua.lua"]
 
 
 class ZTEClient:
@@ -51,103 +74,59 @@ class ZTEClient:
         for proto in ("http", "https"):
             self._base = f"{proto}://{self.ip}"
             try:
-                if self._try_login():
+                if self._lua_login():
                     self._logged_in = True
                     return True
             except Exception:
                 pass
         return False
 
-    def _try_login(self) -> bool:
-        # ── Step 1: GET login page ────────────────────────────────────────────
-        try:
-            r0 = self._session.get(f"{self._base}/", timeout=6)
-            page    = r0.text
-            action  = self._form_action(page, f"{self._base}/")
-            nonce   = self._extract_nonce(page)
-        except Exception:
-            page, action, nonce = "", f"{self._base}/", ""
+    def _lua_login(self) -> bool:
+        # Step 1: numeric login token
+        r1 = self._session.get(
+            f"{self._base}/", params={"_type": "loginData", "_tag": "login_token",
+                                       "_": str(int(time.time() * 1000))},
+            timeout=6
+        )
+        token_m = re.search(r"(\d{5,})", r1.text)
+        if not token_m:
+            return False
+        login_token = token_m.group(1)
 
-        # ── Step 2: Build password candidates ────────────────────────────────
-        pw_list = [
-            _sha256(self.password),                          # ZTE default
-            self.password,                                   # plain
-            _md5(self.password),                             # MD5
-            _b64(self.password),                             # base64
-            _sha256(self.username + _sha256(self.password)), # some variants
-        ]
-        if nonce:
-            pw_list.insert(0, _sha256(self.password + nonce))
-            pw_list.insert(0, _sha256(nonce + self.password))
+        # Step 2: session token + cookie
+        r2 = self._session.get(
+            f"{self._base}/", params={"_type": "loginData", "_tag": "login_entry"},
+            timeout=6
+        )
+        sess_m = re.search(r'"?sess_token"?\s*[:=]\s*"?([a-zA-Z0-9]+)"?', r2.text)
+        sess_token = sess_m.group(1) if sess_m else ""
 
-        hdrs = {
-            "Referer":      f"{self._base}/",
-            "Origin":       self._base,
-            "Content-Type": "application/x-www-form-urlencoded",
-        }
-
-        # ── Step 3: Try form POST ─────────────────────────────────────────────
-        for pw in pw_list:
-            for fields in [
-                {"username": self.username, "psd":      pw},
-                {"username": self.username, "password": pw},
-                {"admin":    self.username, "psd":      pw},
-            ]:
-                try:
-                    resp = self._session.post(action, data=fields,
-                                             headers=hdrs, timeout=8,
-                                             allow_redirects=True)
-                    if self._check_success(resp):
-                        return True
-                except Exception:
-                    continue
-
-        # ── Step 4: JSON-RPC fallback ─────────────────────────────────────────
-        return self._json_rpc_login()
-
-    def _json_rpc_login(self) -> bool:
-        for pw in (_sha256(self.password), self.password):
-            for payload in [
-                {"method": "login",
-                 "params": {"username": self.username, "password": pw}},
-                {"method": "setSystemLogin",
-                 "params": [{"Username": self.username, "Password": pw}]},
-            ]:
-                try:
-                    r = self._session.post(
-                        f"{self._base}/cgi-bin/gui.cgi",
-                        json=payload, timeout=5
-                    )
-                    if r.status_code == 200:
-                        stok = self._extract_stok(r.text)
-                        if stok:
-                            self._stok = stok
-                            return True
-                        try:
-                            obj = r.json()
-                            if obj.get("result") in ("success", 0) or obj.get("code") == 0:
-                                return True
-                        except Exception:
-                            pass
-                except Exception:
-                    continue
-        return False
-
-    def _check_success(self, resp) -> bool:
-        stok = self._extract_stok(resp.url) or self._extract_stok(resp.text)
-        if stok:
-            self._stok = stok
-            return True
-        if self._session.cookies.get("sysauth"):
-            return True
-        # Navigated away from login page
-        if (resp.status_code == 200 and
-                "login" not in resp.url.lower() and
-                len(resp.text) > 500 and
-                any(kw in resp.text.lower() for kw in
-                    ["logout", "signout", "overview", "status", "dashboard",
-                     "mtu", "wan", "lan", "ssid", "wireless"])):
-            return True
+        # Step 3: submit credentials
+        pw_hash = _sha256(self.password + login_token)
+        r3 = self._session.post(
+            f"{self._base}/",
+            params={"_type": "loginData", "_tag": "login_entry"},
+            data={
+                "action":         "login",
+                "Username":       self.username,
+                "Password":       pw_hash,
+                "_sessionTOKEN":  sess_token,
+            },
+            headers={"Referer": f"{self._base}/"},
+            timeout=8,
+        )
+        ok = ('"login_status":"1"' in r3.text or '"login_status":1' in r3.text or
+              "login_state=1" in r3.text or r3.status_code == 200 and
+              "error" not in r3.text.lower() and len(r3.text) > 0)
+        # Verify by trying to fetch a protected page
+        if ok:
+            verify = self._session.get(
+                f"{self._base}/",
+                params={"_type": "menuView", "_tag": "localNetStatus"},
+                timeout=6,
+            )
+            if "login" not in verify.text.lower()[:200]:
+                return True
         return False
 
     # ── Status ────────────────────────────────────────────────────────────────
@@ -155,87 +134,99 @@ class ZTEClient:
     def get_status(self) -> dict:
         if not self._session:
             return {}
-        for fn in (self._status_via_json, self._status_via_page):
-            data = fn()
-            if data:
-                return data
-        return {}
-
-    def _status_via_json(self) -> dict:
-        try:
-            import json
-            stok_suffix = f"?stok={self._stok}" if self._stok else ""
-            r = self._session.post(
-                f"{self._base}/cgi-bin/gui.cgi{stok_suffix}",
-                json={"method": "getSystemInfo", "params": []},
-                timeout=5
-            )
-            obj = r.json().get("result", {})
-            if not obj:
-                return {}
-            return {
-                "internet":      obj.get("wanStatus", 1) == 1,
-                "download":      round(obj.get("downRate", 0) / 1e6, 2),
-                "upload":        round(obj.get("upRate",  0) / 1e6, 2),
-                "ssid":          obj.get("ssid", "ZTE"),
-                "devices_count": obj.get("hostCount", 0),
-                "blocked_count": 0,
-            }
-        except Exception:
-            return {}
-
-    def _status_via_page(self) -> dict:
-        try:
-            urls = [
-                f"{self._base}/getpage.gch?pid=1002003",
-                f"{self._base}/status.asp",
-                f"{self._base}/index.asp",
-            ]
-            for url in urls:
-                r = self._session.get(url, timeout=5)
-                if r.status_code == 200 and len(r.text) > 200:
-                    return {
-                        "internet": True, "download": 0, "upload": 0,
-                        "ssid": "ZTE", "devices_count": 0, "blocked_count": 0,
-                    }
-        except Exception:
-            pass
-        return {}
+        devices = self.get_devices()
+        return {
+            "internet":      True,
+            "download":      0,
+            "upload":        0,
+            "ssid":          "ZTE",
+            "devices_count": len(devices),
+            "blocked_count": 0,
+        }
 
     # ── Devices ───────────────────────────────────────────────────────────────
 
     def get_devices(self) -> list:
         if not self._session:
             return []
+        devices = {}
+        for scripts in (_LAN_SCRIPTS, _WLAN_SCRIPTS):
+            for script in scripts:
+                for d in self._fetch_device_script(script):
+                    if d["mac"]:
+                        devices[d["mac"]] = d
+                if devices:
+                    break
+        return list(devices.values())
+
+    def _fetch_device_script(self, script: str) -> list:
         try:
-            stok_suffix = f"?stok={self._stok}" if self._stok else ""
-            r = self._session.post(
-                f"{self._base}/cgi-bin/gui.cgi{stok_suffix}",
-                json={"method": "getHostInfo", "params": []},
-                timeout=5
+            # Some firmwares require a menuView "page load" call first
+            self._session.get(
+                f"{self._base}/",
+                params={"_type": "menuView", "_tag": "localNetStatus"},
+                timeout=5,
             )
-            result = r.json().get("result", [])
-            return [{
-                "ip":       d.get("IPAddress", d.get("ip", "")),
-                "mac":      d.get("MACAddress", d.get("mac", "")).lower(),
-                "hostname": d.get("HostName", d.get("hostname", "Unknown")),
-                "online":   d.get("Active", 1) == 1,
-            } for d in result]
+            r = self._session.get(
+                f"{self._base}/",
+                params={"_type": "menuData", "_tag": script},
+                timeout=6,
+            )
+            return self._parse_instances(r.text)
         except Exception:
             return []
 
-    # ── Control ───────────────────────────────────────────────────────────────
+    def _parse_instances(self, xml_text: str) -> list:
+        devices = []
+        try:
+            root = ET.fromstring(xml_text)
+        except ET.ParseError:
+            return self._parse_instances_regex(xml_text)
+
+        for instance in root.iter("Instance"):
+            params = {}
+            for child in instance:
+                name = child.get("name") or child.tag
+                params[name] = (child.text or "").strip()
+            mac = params.get("MACAddress", params.get("mac", ""))
+            if not mac:
+                continue
+            devices.append({
+                "ip":       params.get("IPAddress", params.get("ip", "")),
+                "mac":      mac.lower(),
+                "hostname": params.get("HostName", params.get("hostname", "")) or mac,
+                "online":   params.get("Active", "1") in ("1", "true", "True", "yes"),
+            })
+        return devices
+
+    def _parse_instances_regex(self, text: str) -> list:
+        devices = []
+        for block in re.findall(r"<Instance>(.*?)</Instance>", text, re.S):
+            mac_m  = re.search(r"MACAddress[^>]*>([0-9a-fA-F:]{17})", block)
+            ip_m   = re.search(r"IPAddress[^>]*>([\d.]+)", block)
+            name_m = re.search(r"HostName[^>]*>([^<]*)", block)
+            if not mac_m:
+                continue
+            devices.append({
+                "ip":       ip_m.group(1) if ip_m else "",
+                "mac":      mac_m.group(1).lower(),
+                "hostname": (name_m.group(1).strip() if name_m and name_m.group(1).strip()
+                             else mac_m.group(1)),
+                "online":   True,
+            })
+        return devices
+
+    # ── Control (best-effort; not confirmed against real firmware) ─────────────
 
     def set_internet(self, enabled: bool) -> bool:
         if not self._session:
             return False
         try:
-            stok_suffix = f"?stok={self._stok}" if self._stok else ""
             r = self._session.post(
-                f"{self._base}/cgi-bin/gui.cgi{stok_suffix}",
-                json={"method": "setWanConnectStatus",
-                      "params": [1 if enabled else 0]},
-                timeout=5
+                f"{self._base}/",
+                params={"_type": "setData", "_tag": "wan_conn_status"},
+                data={"Enable": "1" if enabled else "0"},
+                timeout=5,
             )
             return r.status_code == 200
         except Exception:
@@ -245,12 +236,11 @@ class ZTEClient:
         if not self._session:
             return False
         try:
-            stok_suffix = f"?stok={self._stok}" if self._stok else ""
-            method = "addMacFilter" if block else "delMacFilter"
             r = self._session.post(
-                f"{self._base}/cgi-bin/gui.cgi{stok_suffix}",
-                json={"method": method, "params": [mac]},
-                timeout=5
+                f"{self._base}/",
+                params={"_type": "setData", "_tag": "wlan_mac_filter"},
+                data={"MACAddress": mac, "Enable": "1" if block else "0"},
+                timeout=5,
             )
             return r.status_code == 200
         except Exception:
@@ -260,44 +250,12 @@ class ZTEClient:
         if not self._session:
             return False
         try:
-            stok_suffix = f"?stok={self._stok}" if self._stok else ""
             r = self._session.post(
-                f"{self._base}/cgi-bin/gui.cgi{stok_suffix}",
-                json={"method": "setQoSBandwidthRule",
-                      "params": [{"mac": mac,
-                                  "downBandwidth": dl_kbps,
-                                  "upBandwidth":   ul_kbps}]},
-                timeout=5
+                f"{self._base}/",
+                params={"_type": "setData", "_tag": "qos_bandwidth_rule"},
+                data={"MACAddress": mac, "DownBandwidth": dl_kbps, "UpBandwidth": ul_kbps},
+                timeout=5,
             )
             return r.status_code == 200
         except Exception:
             return False
-
-    # ── Helpers ───────────────────────────────────────────────────────────────
-
-    def _form_action(self, html: str, fallback: str) -> str:
-        m = re.search(r'<form[^>]+action=["\']?([^"\'>\s]+)', html, re.I)
-        raw = m.group(1) if m else ""
-        if not raw:
-            return fallback
-        if raw.startswith("http"):
-            return raw
-        if raw.startswith("/"):
-            return self._base + raw
-        return self._base + "/" + raw
-
-    def _extract_stok(self, text: str) -> str:
-        m = re.search(r"stok=([a-f0-9]+)", text)
-        return m.group(1) if m else ""
-
-    def _extract_nonce(self, html: str) -> str:
-        for pat in [
-            r'name=["\']?rand["\']?[^>]+value=["\']?(\w+)',
-            r'challenge["\']?\s*[:=]\s*["\']([a-f0-9]+)',
-            r'nonce["\']?\s*[:=]\s*["\'](\w+)',
-            r'var\s+rand\s*=\s*["\'](\w+)',
-        ]:
-            m = re.search(pat, html, re.I)
-            if m:
-                return m.group(1)
-        return ""
